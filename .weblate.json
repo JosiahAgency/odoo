@@ -807,6 +807,11 @@
                 "new_base": "addons/payment_dpo/i18n/payment_dpo.pot"
             },
             {
+                "name": "payment_ecpay",
+                "filemask": "addons/payment_ecpay/i18n/*.po",
+                "new_base": "addons/payment_ecpay/i18n/payment_ecpay.pot"
+            },
+            {
                 "name": "payment_flutterwave",
                 "filemask": "addons/payment_flutterwave/i18n/*.po",
                 "new_base": "addons/payment_flutterwave/i18n/payment_flutterwave.pot"
@@ -840,6 +845,11 @@
                 "name": "payment_paypal",
                 "filemask": "addons/payment_paypal/i18n/*.po",
                 "new_base": "addons/payment_paypal/i18n/payment_paypal.pot"
+            },
+            {
+                "name": "payment_payu",
+                "filemask": "addons/payment_payu/i18n/*.po",
+                "new_base": "addons/payment_payu/i18n/payment_payu.pot"
             },
             {
                 "name": "payment_razorpay",
@@ -905,6 +915,11 @@
                 "name": "pos_cashdro",
                 "filemask": "addons/pos_cashdro/i18n/*.po",
                 "new_base": "addons/pos_cashdro/i18n/pos_cashdro.pot"
+            },
+            {
+                "name": "pos_cashmatic",
+                "filemask": "addons/pos_cashmatic/i18n/*.po",
+                "new_base": "addons/pos_cashmatic/i18n/pos_cashmatic.pot"
             },
             {
                 "name": "pos_discount",
@@ -1060,6 +1075,11 @@
                 "name": "pos_self_order_stripe",
                 "filemask": "addons/pos_self_order_stripe/i18n/*.po",
                 "new_base": "addons/pos_self_order_stripe/i18n/pos_self_order_stripe.pot"
+            },
+            {
+                "name": "pos_self_order_viva_com",
+                "filemask": "addons/pos_self_order_viva_com/i18n/*.po",
+                "new_base": "addons/pos_self_order_viva_com/i18n/pos_self_order_viva_com.pot"
             },
             {
                 "name": "pos_sms",
@@ -2292,6 +2312,18 @@
                 "language_regex": "^(fr)$"
             },
             {
+                "name": "l10n_fr_pdp",
+                "filemask": "addons/l10n_fr_pdp/i18n/*.po",
+                "new_base": "addons/l10n_fr_pdp/i18n/l10n_fr_pdp.pot",
+                "language_regex": "^(fr)$"
+            },
+            {
+                "name": "l10n_fr_pdp_pos",
+                "filemask": "addons/l10n_fr_pdp_pos/i18n/*.po",
+                "new_base": "addons/l10n_fr_pdp_pos/i18n/l10n_fr_pdp_pos.pot",
+                "language_regex": "^(fr)$"
+            },
+            {
                 "name": "l10n_fr_pos_cert",
                 "filemask": "addons/l10n_fr_pos_cert/i18n/*.po",
                 "new_base": "addons/l10n_fr_pos_cert/i18n/l10n_fr_pos_cert.pot",
@@ -2302,6 +2334,12 @@
                 "filemask": "addons/l10n_ga/i18n/*.po",
                 "new_base": "addons/l10n_ga/i18n/l10n_ga.pot",
                 "language_regex": "^(fr)$"
+            },
+            {
+                "name": "l10n_ge",
+                "filemask": "addons/l10n_ge/i18n/*.po",
+                "new_base": "addons/l10n_ge/i18n/l10n_ge.pot",
+                "language_regex": "^(ka)$"
             },
             {
                 "name": "l10n_gn",
@@ -2379,6 +2417,12 @@
                 "name": "l10n_hu_edi",
                 "filemask": "addons/l10n_hu_edi/i18n/*.po",
                 "new_base": "addons/l10n_hu_edi/i18n/l10n_hu_edi.pot",
+                "language_regex": "^(hu)$"
+            },
+            {
+                "name": "l10n_hu_edi_receive",
+                "filemask": "addons/l10n_hu_edi_receive/i18n/*.po",
+                "new_base": "addons/l10n_hu_edi_receive/i18n/l10n_hu_edi_receive.pot",
                 "language_regex": "^(hu)$"
             },
             {
@@ -2742,6 +2786,12 @@
                 "language_regex": "^(pl)$"
             },
             {
+                "name": "l10n_pl_bank_verification",
+                "filemask": "addons/l10n_pl_bank_verification/i18n/*.po",
+                "new_base": "addons/l10n_pl_bank_verification/i18n/l10n_pl_bank_verification.pot",
+                "language_regex": "^(pl)$"
+            },
+            {
                 "name": "l10n_pl_edi",
                 "filemask": "addons/l10n_pl_edi/i18n/*.po",
                 "new_base": "addons/l10n_pl_edi/i18n/l10n_pl_edi.pot",
@@ -2934,6 +2984,12 @@
                 "language_regex": "^(zh_TW)$"
             },
             {
+                "name": "l10n_tw_edi_ecpay_pos",
+                "filemask": "addons/l10n_tw_edi_ecpay_pos/i18n/*.po",
+                "new_base": "addons/l10n_tw_edi_ecpay_pos/i18n/l10n_tw_edi_ecpay_pos.pot",
+                "language_regex": "^(zh_TW)$"
+            },
+            {
                 "name": "l10n_tw_edi_ecpay_website_sale",
                 "filemask": "addons/l10n_tw_edi_ecpay_website_sale/i18n/*.po",
                 "new_base": "addons/l10n_tw_edi_ecpay_website_sale/i18n/l10n_tw_edi_ecpay_website_sale.pot",
@@ -2979,7 +3035,7 @@
                 "name": "l10n_uz",
                 "filemask": "addons/l10n_uz/i18n/*.po",
                 "new_base": "addons/l10n_uz/i18n/l10n_uz.pot",
-                "language_regex": "^(uz)$"
+                "language_regex": "^(ru|uz)$"
             },
             {
                 "name": "l10n_ve",

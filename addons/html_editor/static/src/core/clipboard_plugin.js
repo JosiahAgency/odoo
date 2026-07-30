@@ -493,19 +493,7 @@ export class ClipboardPlugin extends Plugin {
                 }
             }
         } else if (node.nodeType !== Node.TEXT_NODE) {
-            if (node.nodeName === "THEAD") {
-                const tbody = node.nextElementSibling;
-                if (tbody) {
-                    // If a <tbody> already exists, move all rows from
-                    // <thead> into the start of <tbody>.
-                    tbody.prepend(...node.children);
-                    node.remove();
-                    node = tbody;
-                } else {
-                    // Otherwise, replace the <thead> with <tbody>
-                    node = this.dependencies.dom.setTagName(node, "TBODY");
-                }
-            } else if (["TD", "TH"].includes(node.nodeName)) {
+            if (["TD", "TH"].includes(node.nodeName)) {
                 // Insert base container into empty TD.
                 if (isEmptyBlock(node)) {
                     const baseContainer = this.dependencies.baseContainer.createBaseContainer();
@@ -682,6 +670,16 @@ export class ClipboardPlugin extends Plugin {
                 const range = this.document.caretRangeFromPoint(ev.clientX, ev.clientY);
                 deleteAndSetSelection(range.startContainer, range.startOffset);
             }
+        }
+        if (
+            this.delegateTo(
+                "html_drop_overrides",
+                this.dependencies.selection.getEditableSelection(),
+                ev.dataTransfer
+            )
+        ) {
+            this.dependencies.history.addStep();
+            return;
         }
         if (odooEditorHtml) {
             const fragment = parseHTML(this.document, odooEditorHtml);

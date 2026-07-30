@@ -281,6 +281,22 @@ class AccountMoveLine(models.Model):
         compute='_compute_reconciled_lines_excluding_exchange_diff_ids',
     )
 
+    # Those fields are here only to be used in the Bankrec widget JS for performance purpose
+    first_reconciled_lines_id = fields.Many2one(
+        comodel_name='account.move.line',
+        compute='_compute_reconciled_lines_ids',
+    )
+    count_reconciled_lines = fields.Integer(compute='_compute_reconciled_lines_ids')
+    first_reconciled_lines_excluding_exchange_diff_id = fields.Many2one(
+        comodel_name='account.move.line',
+        compute='_compute_reconciled_lines_excluding_exchange_diff_ids',
+    )
+    count_reconciled_lines_excluding_exchange_diff = fields.Boolean(compute='_compute_reconciled_lines_excluding_exchange_diff_ids')
+    exchange_move_ids = fields.Many2many(
+        comodel_name='account.move',
+        compute='_compute_exchange_move',
+    )
+
     matching_number = fields.Char(
         string="Matching #",
         copy=False,
@@ -934,7 +950,7 @@ class AccountMoveLine(models.Model):
     @api.depends('product_id', 'product_uom_id')
     def _compute_tax_ids(self):
         for line in self:
-            if line.display_type in ('line_section', 'line_subsection', 'line_note', 'payment_term') or line.is_imported:
+            if line.display_type in ('line_section', 'line_subsection', 'line_note', 'payment_term', 'cogs') or line.is_imported:
                 continue
             # /!\ Don't remove existing taxes if there is no explicit taxes set on the account.
             account_taxes = line.account_id.sudo().tax_ids
@@ -1253,19 +1269,36 @@ class AccountMoveLine(models.Model):
             line.payment_date = line.discount_date if line.discount_date and date.today() <= line.discount_date else line.date_maturity
 
     @api.depends('matched_debit_ids', 'matched_credit_ids')
-    def _compute_reconciled_lines_ids(self):
+    def _compute_exchange_move(self):
         for line in self:
-            line.reconciled_lines_ids = line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id
+            line.exchange_move_ids = (line.matched_debit_ids | line.matched_credit_ids).exchange_move_id
+
+    def _compute_sql_payment_date(self, table):
+        return SQL("""
+            CASE
+                WHEN %(discount_date)s IS NOT NULL AND %(today)s <= %(discount_date)s THEN %(discount_date)s
+                ELSE %(date_maturity)s
+            END""",
+            today=fields.Date.context_today(self),
+            discount_date=table.discount_date,
+            date_maturity=table.date_maturity,
+        )
 
     @api.depends('matched_debit_ids', 'matched_credit_ids')
+    def _compute_reconciled_lines_ids(self):
+        accessible_lines = set((self.matched_debit_ids.debit_move_id + self.matched_credit_ids.credit_move_id)._filtered_access('read'))
+        for line in self:
+            line.sudo().reconciled_lines_ids = (line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id).filtered(accessible_lines.__contains__)
+            line.first_reconciled_lines_id = line.reconciled_lines_ids[:1]
+            line.count_reconciled_lines = len(line.reconciled_lines_ids)
+
+    @api.depends('reconciled_lines_ids', 'matched_debit_ids', 'matched_credit_ids')
     def _compute_reconciled_lines_excluding_exchange_diff_ids(self):
         for line in self:
-            all_lines = line.matched_debit_ids.debit_move_id + line.matched_credit_ids.credit_move_id
-            excluded_ids = (
-                line.matched_debit_ids.exchange_move_id.line_ids +
-                line.matched_credit_ids.exchange_move_id.line_ids
-            )
-            line.reconciled_lines_excluding_exchange_diff_ids = all_lines - excluded_ids
+            excluded_ids = (line.matched_debit_ids + line.matched_credit_ids).exchange_move_id.line_ids
+            line.sudo().reconciled_lines_excluding_exchange_diff_ids = line.reconciled_lines_ids - excluded_ids
+            line.first_reconciled_lines_excluding_exchange_diff_id = line.reconciled_lines_excluding_exchange_diff_ids[:1]
+            line.count_reconciled_lines_excluding_exchange_diff = len(line.reconciled_lines_excluding_exchange_diff_ids)
 
     def _compute_parent_id(self):
         parent_id_vals_to_lines = defaultdict(list)
@@ -1276,7 +1309,6 @@ class AccountMoveLine(models.Model):
             last_section = False
             last_sub = False
             for line in move.line_ids.sorted('sequence'):
-                value = False
                 if line.display_type == 'line_section':
                     last_section = line
                     value = False
@@ -1291,7 +1323,9 @@ class AccountMoveLine(models.Model):
                 parent_id_vals_to_lines[value].append(line.id)
 
         for val, record_ids in parent_id_vals_to_lines.items():
-            self.browse(record_ids).parent_id = val
+            # We don't want to update parent_id of lines outside of the current recordset (self)
+            # as it would trigger unwanted recompute recursion on records outside the protected compute batch.
+            (self.browse(record_ids) & self).parent_id = val
 
     @api.depends('journal_id.type')
     def _compute_no_followup(self):
@@ -1550,7 +1584,7 @@ class AccountMoveLine(models.Model):
             if common_tags:
                 raise ValidationError(_("Taxes exigible on payment and on invoice cannot be mixed on the same journal item if they share some tag."))
 
-    @api.constrains('matching_number', 'matched_debit_ids', 'matched_credit_ids')
+    @api.constrains('matching_number', 'matched_debit_ids', 'matched_credit_ids', 'full_reconcile_id')
     def _constrains_matching_number(self):
         for line in self:
             if line.matching_number:
@@ -1572,7 +1606,7 @@ class AccountMoveLine(models.Model):
     @api.constrains('deductible_amount')
     def _constrains_deductible_amount(self):
         for line in self:
-            if not line.move_id.is_purchase_document() and float_compare(line.deductible_amount, 100, precision_digits=2):
+            if not line.move_id.is_purchase_document(include_receipts=True) and float_compare(line.deductible_amount, 100, precision_digits=2):
                 raise ValidationError(_("Only vendor bills allow for deductibility of product/services."))
             if line.deductible_amount < 0 or line.deductible_amount > 100:
                 raise ValidationError(_("The deductibility must be a value between 0 and 100."))
@@ -1841,7 +1875,8 @@ class AccountMoveLine(models.Model):
                 st_line.move_id.line_ids._check_tax_lock_date()
             except UserError:
                 st_lines_to_unreconcile -= st_line
-        st_lines_to_unreconcile.action_undo_reconciliation()
+        if st_lines_to_unreconcile:
+            st_lines_to_unreconcile.action_undo_reconciliation()
 
         self.browse(tax_lock_check_ids)._check_tax_lock_date()
 
@@ -3531,7 +3566,8 @@ class AccountMoveLine(models.Model):
         section_total = sum(l.price_total for l in children_lines)
         result = [{
             'name': self.name,
-            'taxes': [tax.tax_label for tax in children_lines.tax_ids if tax.tax_label],
+            'product': False,
+            'taxes': [tax.tax_label for tax in children_lines.tax_ids if tax.tax_label] if not self.collapse_prices else [],
             'price_subtotal': section_subtotal,
             'price_total': section_total,
             'display_type': self.display_type,
@@ -3540,20 +3576,22 @@ class AccountMoveLine(models.Model):
             'product_uom': False,
             'discount': 0.0,
         }]
+        if self.collapse_composition:
+            return result
 
-        if not self.collapse_composition:
-            for line in direct_children_lines:
-                result.append({
-                    'name': line.name,
-                    'taxes': [tax.tax_label for tax in line.tax_ids if tax.tax_label] if not self.collapse_prices else [],
-                    'price_subtotal': line.price_subtotal,
-                    'price_total': line.price_total,
-                    'display_type': line.display_type,
-                    'quantity': line.quantity,
-                    'line_uom': line.product_uom_id,
-                    'product_uom': line.product_id.uom_id,
-                    'discount': line.discount,
-                })
+        for line in direct_children_lines:
+            result.append({
+                'name': line.name,
+                'product': line.product_id,
+                'taxes': [tax.tax_label for tax in line.tax_ids if tax.tax_label],
+                'price_subtotal': line.price_subtotal,
+                'price_total': line.price_total,
+                'display_type': line.display_type,
+                'quantity': line.quantity,
+                'line_uom': line.product_uom_id,
+                'product_uom': line.product_id.uom_id,
+                'discount': line.discount,
+            })
 
         for subsection_line in subsection_lines:
             lines_in_subsection = children_lines.filtered(lambda l: l.parent_id == subsection_line)
@@ -3564,9 +3602,10 @@ class AccountMoveLine(models.Model):
                 total = sum(l.price_total for l in lines_for_tax_group)
                 if not subtotal and not tax_labels:
                     continue
-                if subsection_line.collapse_composition or self.collapse_composition:
+                if subsection_line.collapse_composition:
                     result.append({
                         'name': subsection_line.name,
+                        'product': False,
                         'taxes': tax_labels,
                         'price_subtotal': subtotal,
                         'price_total': total,
@@ -3580,7 +3619,8 @@ class AccountMoveLine(models.Model):
                     for line in subsection_line | lines_for_tax_group:
                         result.append({
                             'name': line.name,
-                            'taxes': tax_labels if line == subsection_line else [],
+                            'product': line.product_id,
+                            'taxes': tax_labels if (line == subsection_line and not self.collapse_prices) or (line != subsection_line and self.collapse_prices) else [],
                             'price_subtotal': subtotal if line == subsection_line else line.price_subtotal,
                             'price_total': total if line == subsection_line else line.price_total,
                             'display_type': line.display_type,

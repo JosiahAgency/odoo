@@ -322,7 +322,7 @@ READ_GROUP_DISPLAY_FORMAT = {
     # Mixing both formats, e.g. 'MMM YYYY' would yield wrong results,
     # such as 2006-01-01 being formatted as "January 2005" in some locales.
     # Cfr: http://babel.pocoo.org/en/latest/dates.html#date-fields
-    'hour': 'hh:00 dd MMM',
+    'hour': 'HH:00 dd MMM',
     'day': 'dd MMM yyyy', # yyyy = normal year
     'week': "'W'w YYYY",  # w YYYY = ISO week-year
     'month': 'MMMM yyyy',
@@ -1313,7 +1313,7 @@ class BaseModel(metaclass=MetaModel):
                 continue
 
             # 5. delegate to parent model
-            if field.inherited:
+            if field.inherited and self._has_field_access(field, 'write'):
                 field = field.related_field
                 parent_fields[field.model_name].append(field.name)
 
@@ -4684,6 +4684,8 @@ class BaseModel(metaclass=MetaModel):
                 # against (re)computation
                 if field.compute and (not field.readonly or field.precompute):
                     protected.update(self.pool.field_computed.get(field, [field]))
+                if field.type == 'many2one' and field.bypass_search_access and not self.env.su:
+                    self.env[field.comodel_name].browse(field.convert_to_cache(val, self)).check_access('read')
 
             data_list.append(data)
 
@@ -6970,12 +6972,13 @@ class BaseModel(metaclass=MetaModel):
             for dep in self.pool.get_dependent_fields(field.base_field)
         )
 
-    def _apply_onchange_methods(self, field_name: str, result: dict) -> None:
-        """ Apply onchange method(s) for field ``field_name`` on ``self``. Value
-            assignments are applied on ``self``, while warning messages are put
-            in dictionary ``result``.
+    def _apply_onchange_methods(self, field_name: str, result: dict, excluded_methods=()) -> None:
+        """ Apply onchange method(s) (not in ``excluded_methods``) for field ``field_name`` on ``self``.
+        Value assignments are applied on ``self``, while warning messages are put in dictionary ``result``.
         """
         for method in self._onchange_methods.get(field_name, ()):
+            if method in excluded_methods:
+                continue
             res = method(self)
             if not res:
                 continue

@@ -1200,6 +1200,18 @@ class TestSaleTimesheet(TestCommonSaleTimesheet):
         self.assertFalse(timesheet1.timesheet_invoice_id, "Timesheet1 should be cleared after partial refund of its task")
         self.assertEqual(timesheet2.timesheet_invoice_id, invoice2, "Timesheet2 should still be linked to the original invoice")
 
+        # Make sure only the refunded line is invoiced again
+        context = {
+            'active_model': 'sale.order',
+            'active_ids': sale_order2.ids,
+            'default_journal_id': self.company_data['default_journal_sale'].id
+        }
+        wizard = self.env['sale.advance.payment.inv'].with_context(context).create({})
+        invoice_dict = wizard.create_invoices()
+        new_invoice = self.env['account.move'].browse(invoice_dict.get('res_id', []))
+        self.assertEqual(len(new_invoice.invoice_line_ids), 1, "Only the refunded line should be invoiced again")
+        self.assertEqual(new_invoice.invoice_line_ids.sale_line_ids, so_line1, "The invoiced line should be the refunded line")
+
     def test_invoice_with_already_invoiced_timesheets(self):
         """Checks that when an invoice is created, the hours that have already been invoiced aren't taken into
         account."""
@@ -1280,6 +1292,58 @@ class TestSaleTimesheet(TestCommonSaleTimesheet):
         with self.assertRaises(UserError, msg='Should not be able to invoice already invoiced timesheets'):
             wizard_2.create_invoices()
 
+    def test_invoice_remaining_qty_after_partial_invoice(self):
+        """Invoicing part of a timesheet-delivered line, then invoicing again
+        without a period, should bill the remaining delivered quantity even
+        though every timesheet is already linked to the first invoice."""
+        product = self.env['product.product'].create({
+            'name': "Service delivered on timesheets",
+            'list_price': 90,
+            'type': 'service',
+            'service_policy': 'delivered_timesheet',
+            'invoice_policy': 'delivery',
+            'service_type': 'timesheet',
+            'service_tracking': 'task_global_project',
+            'project_id': self.project_global.id,
+            'taxes_id': False,
+        })
+        partner = self.env['res.partner'].create({'name': 'Toto'})
+        sale_order = self.env['sale.order'].create({
+            'partner_id': partner.id,
+            'order_line': [
+                Command.create({'product_id': product.id, 'product_uom_qty': 10.0}),
+            ],
+        })
+        sale_order.action_confirm()
+        sol = sale_order.order_line
+        task = sale_order.tasks_ids
+        self.env['account.analytic.line'].create({
+            'name': 'Test Line',
+            'project_id': task.project_id.id,
+            'task_id': task.id,
+            'unit_amount': 10.0,
+            'employee_id': self.employee_user.id,
+        })
+        context = {
+            'active_model': 'sale.order',
+            'active_ids': sale_order.ids,
+            'active_id': sale_order.id,
+        }
+        wizard = self.env['sale.advance.payment.inv'].with_context(context).create({
+            'advance_payment_method': 'delivered',
+        })
+        invoice = self.env['account.move'].browse(wizard.create_invoices()['res_id'])
+        invoice.invoice_line_ids.filtered(lambda line: line.sale_line_ids).quantity = 6.0
+        invoice.action_post()
+
+        wizard_2 = self.env['sale.advance.payment.inv'].with_context(context).create({
+            'advance_payment_method': 'delivered',
+        })
+        invoice_2 = self.env['account.move'].browse(wizard_2.create_invoices()['res_id'])
+        self.assertEqual(invoice_2.invoice_line_ids.sale_line_ids, sol)
+        self.assertEqual(invoice_2.invoice_line_ids.quantity, 4.0,
+            "The second invoice should bill the remaining delivered hours.")
+
     def test_invoice_timesheet_uom_conversion_with_period(self):
         """
         Ensure that invoice quantities are correctly computed when the
@@ -1332,6 +1396,67 @@ class TestSaleTimesheet(TestCommonSaleTimesheet):
         invoice_dict = wizard.create_invoices()
         invoice = self.env['account.move'].browse(invoice_dict['res_id'])
         self.assertEqual(invoice.invoice_line_ids.quantity, 2)
+
+    def test_partial_refund_timesheet_qty_to_invoice(self):
+        """When a delivered-timesheet invoice line is partially refunded, the next invoice must
+        only include the remaining non-invoiced hours."""
+
+        sale_order = self.env['sale.order'].create({
+            'partner_id': self.partner_a.id,
+            'partner_invoice_id': self.partner_a.id,
+            'partner_shipping_id': self.partner_a.id,
+            'order_line': [
+                Command.create({
+                    'product_id': self.product_delivery_timesheet3.id,
+                    'product_uom_qty': 1,
+                }),
+            ]
+        })
+        so_line = sale_order.order_line[0]
+        sale_order.action_confirm()
+        self.env['account.analytic.line'].create({
+            'name': 'Timesheet 20h',
+            'project_id': so_line.task_id.project_id.id,
+            'task_id': so_line.task_id.id,
+            'unit_amount': 20.0,
+            'employee_id': self.employee_user.id,
+        })
+        invoice = sale_order._create_invoices()[0]
+        invoice.action_post()
+        self.assertEqual(so_line.qty_invoiced, 20.0)
+
+        refund_wizard = self.env['account.move.reversal'].with_context(
+            active_model='account.move',
+            active_ids=invoice.ids,
+        ).create({
+            'reason': 'partial refund',
+            'journal_id': invoice.journal_id.id,
+        })
+        refund_action = refund_wizard.refund_moves()
+        credit_note = self.env['account.move'].browse(refund_action['res_id'])
+        credit_note.invoice_line_ids.write({'quantity': 11.0})
+        credit_note.action_post()
+        self.assertEqual(so_line.qty_invoiced, 9.0)
+
+        self.env['account.analytic.line'].create({
+            'name': 'Timesheet 5h',
+            'project_id': so_line.task_id.project_id.id,
+            'task_id': so_line.task_id.id,
+            'unit_amount': 5.0,
+            'employee_id': self.employee_user.id,
+        })
+
+        context = {
+            'active_model': 'sale.order',
+            'active_ids': sale_order.ids,
+            'default_journal_id': self.company_data['default_journal_sale'].id
+        }
+        wizard = self.env['sale.advance.payment.inv'].with_context(context).create({})
+        invoice_dict = wizard.create_invoices()
+        new_invoice = self.env['account.move'].browse(invoice_dict.get('res_id', []))
+        self.assertEqual(len(new_invoice.invoice_line_ids), 1)
+        self.assertEqual(new_invoice.invoice_line_ids.quantity, 16.0)
+        self.assertEqual(so_line.timesheet_ids.timesheet_invoice_id, new_invoice, "All timesheets should be linked to the newly created invoice")
 
     def test_portal_sale_order_timesheet_visibility(self):
         """
@@ -1520,3 +1645,33 @@ class TestSaleTimesheetAnalyticPlan(TestCommonSaleTimesheet):
             'employee_id': self.employee_manager.id,
             'so_line': so_line.id,
         })
+
+    def test_remove_so_line_upon_change_project(self):
+        sale_order = self.env['sale.order'].create({
+            'name': 'SO Test',
+            'partner_id': self.partner_a.id,
+        })
+        so_line = self.env['sale.order.line'].create({
+            'product_id': self.product_order_timesheet4.id,
+            'product_uom_qty': 10,
+            'order_id': sale_order.id,
+            'analytic_distribution': {f'{self.analytic_account_sale.id}': 100},
+        })
+        analytic_line = self.env['account.analytic.line'].create({
+            'name': 'Test Line',
+            'project_id': self.project_global.id,
+            'unit_amount': 50,
+            'employee_id': self.employee_manager.id,
+            'is_so_line_edited': True,
+            'so_line': so_line.id,
+        })
+
+        self.assertEqual(analytic_line.so_line, so_line)
+        self.assertTrue(analytic_line.is_so_line_edited)
+
+        analytic_line.write({
+            'project_id': self.project_non_billable.id,
+        })
+
+        self.assertFalse(analytic_line.so_line)
+        self.assertFalse(analytic_line.is_so_line_edited)

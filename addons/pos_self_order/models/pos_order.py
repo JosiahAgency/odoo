@@ -45,7 +45,7 @@ class PosOrder(models.Model):
     ])
 
     def write(self, vals):
-        if 'table_id' in vals and self.self_ordering_table_id:
+        if 'table_id' in vals and vals['table_id'] and self.self_ordering_table_id:
             # Clear stale self-order table link when the order is transferred to a new table.
             vals['self_ordering_table_id'] = vals['table_id']
         return super().write(vals)
@@ -220,8 +220,8 @@ class PosOrder(models.Model):
             'tracking_number': tracking_number,
             'source': 'kiosk' if device_type == 'kiosk' else 'mobile',
             'email': partner.email if partner else order.get('email'),
-            'mobile': order.get('mobile'),
-            'state': order.get('state'),
+            'mobile': partner.phone if partner else order.get('mobile'),
+            'state': 'draft',
             'account_move': order.get('account_move'),
             'floating_order_name': floating_order_name,
             'general_customer_note': order.get('general_customer_note'),

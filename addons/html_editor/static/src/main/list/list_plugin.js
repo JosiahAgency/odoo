@@ -2,6 +2,7 @@ import { Plugin } from "@html_editor/plugin";
 import { closestBlock, isBlock } from "@html_editor/utils/blocks";
 import {
     removeClass,
+    removeEmptyTextNodes,
     removeStyle,
     toggleClass,
     unwrapContents,
@@ -209,6 +210,11 @@ export class ListPlugin extends Plugin {
                     range.isPointInRange(startLeaf, 0) &&
                     range.isPointInRange(endLeaf, nodeSize(endLeaf))
                 );
+            }
+        },
+        selection_placeholder_container_predicates: (container) => {
+            if (isListItemElement(container)) {
+                return true;
             }
         },
     };
@@ -548,6 +554,11 @@ export class ListPlugin extends Plugin {
         ) {
             element.classList.add("oe-nested");
         }
+
+        element.classList.toggle(
+            "o_checked_has_nested_list",
+            element.classList.contains("o_checked") && !!element.querySelector("ul, ol")
+        );
 
         if (
             [...element.children].some(
@@ -1110,6 +1121,9 @@ export class ListPlugin extends Plugin {
         }
         const cursors = this.dependencies.selection.preserveSelection();
         for (const listItem of listItems) {
+            // Remove empty text nodes without breaking the current selection.
+            removeEmptyTextNodes(listItem, cursors);
+
             if (this.dependencies.selection.areNodeContentsFullySelected(listItem)) {
                 for (const node of [
                     listItem,
@@ -1185,6 +1199,9 @@ export class ListPlugin extends Plugin {
             if (!hasOnlyBaseBlocks || (!applyStyle && !hasExistingFontSize)) {
                 continue;
             }
+
+            // Remove empty text nodes without breaking the current selection.
+            removeEmptyTextNodes(listItem, cursors);
 
             if (this.dependencies.selection.areNodeContentsFullySelected(listItem)) {
                 for (const node of [

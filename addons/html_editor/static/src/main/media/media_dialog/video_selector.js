@@ -16,7 +16,7 @@ class VideoOption extends Component {
         label: { type: String, optional: true },
         onChangeOption: Function,
         onChangeStartAt: Function,
-        value: { type: String, optional: true },
+        value: { type: [String, Boolean], optional: true },
         name: { type: String, optional: true },
     };
 
@@ -306,16 +306,20 @@ export class VideoSelector extends Component {
     async prepareVimeoPreviews() {
         await Promise.all(
             this.props.vimeoPreviewIds.map(async (videoId) => {
-                const { thumbnail_url: thumbnailSrc } = await this.http.get(
-                    `https://vimeo.com/api/oembed.json?url=http%3A//vimeo.com/${encodeURIComponent(
-                        videoId
-                    )}`
-                );
-                this.state.vimeoPreviews.push({
-                    id: videoId,
-                    thumbnailSrc,
-                    src: `https://player.vimeo.com/video/${encodeURIComponent(videoId)}`,
-                });
+                try {
+                    const { thumbnail_url: thumbnailSrc } = await this.http.get(
+                        `https://vimeo.com/api/oembed.json?url=http%3A//vimeo.com/${encodeURIComponent(
+                            videoId
+                        )}`
+                    );
+                    this.state.vimeoPreviews.push({
+                        id: videoId,
+                        thumbnailSrc,
+                        src: `https://player.vimeo.com/video/${encodeURIComponent(videoId)}`,
+                    });
+                } catch (err) {
+                    console.warn(`Could not get video #${videoId} from vimeo: ${err}`);
+                }
             })
         );
     }

@@ -395,7 +395,10 @@ def get_text_content(term):
 
 def is_text(term):
     """ Return whether the term has only text. """
-    return len(html.fromstring(f"<_>{term}</_>")) == 0
+    it = html.fromstring(f"<root>{term}</root>").iter()
+    next(it)  # consume <root>
+    return next(it, None) is None
+
 
 xml_translate.get_text_content = get_text_content
 html_translate.get_text_content = get_text_content
@@ -1698,7 +1701,7 @@ class TranslationImporter:
                     for xmlid, translations in sub_field_dictionary:
                         params.extend([*xmlid.split('.', maxsplit=1), Json(translations)])
                     if not force_overwrite:
-                        value_query = f"""CASE WHEN {overwrite} IS TRUE AND imd.noupdate IS FALSE
+                        value_query = f"""CASE WHEN {overwrite} IS TRUE AND imd.noupdate IS NOT TRUE
                         THEN m."{field_name}" || t.value
                         ELSE t.value || m."{field_name}"END"""
                     else:

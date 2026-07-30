@@ -2,14 +2,14 @@
 # This file contains the translation of the following modules:
 # * account
 #
-# Weblate <noreply-mt-weblate@weblate.org>, 2025.
+# Weblate <noreply-mt-weblate@weblate.org>, 2025, 2026.
 # "Ujjawal Pathak (pauj)" <pauj@odoo.com>, 2026.
 msgid ""
 msgstr ""
 "Project-Id-Version: Odoo Server saas~18.4\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-01 17:35+0000\n"
-"PO-Revision-Date: 2026-04-09 11:30+0000\n"
+"POT-Creation-Date: 2026-07-17 17:37+0000\n"
+"PO-Revision-Date: 2026-06-30 04:32+0000\n"
 "Last-Translator: \"Ujjawal Pathak (pauj)\" <pauj@odoo.com>\n"
 "Language-Team: Hindi <https://translate.odoo.com/projects/odoo-19/account/hi/"
 ">\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: \n"
 "Plural-Forms: nplurals=2; plural=n > 1;\n"
-"X-Generator: Weblate 5.16.2\n"
+"X-Generator: Weblate 2026.6.1\n"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_account_journal__type
@@ -293,18 +293,6 @@ msgstr "%s टैक्स"
 
 #. module: account
 #. odoo-python
-#: code:addons/account/models/company.py:0
-msgid "%s, or / if not applicable"
-msgstr "%s, या / अगर लागू नहीं हो"
-
-#. module: account
-#. odoo-python
-#: code:addons/account/models/partner.py:0
-msgid "%s, or not applicable"
-msgstr "%s, या लागू नहीं हो"
-
-#. module: account
-#. odoo-python
 #: code:addons/account/models/account_document_import_mixin.py:0
 msgid "'%(filename)s' (extracted from '%(root_filename)s', type=%(type)s)"
 msgstr ""
@@ -415,12 +403,6 @@ msgstr "... (%(nb_of_values)s अन्य)"
 #: code:addons/account/static/src/components/x2many_buttons/x2many_buttons.xml:0
 msgid "... (View all)"
 msgstr "... (सभी देखें)"
-
-#. module: account
-#. odoo-python
-#: code:addons/account/models/company.py:0
-msgid "/ if not applicable"
-msgstr "/ अगर लागू नहीं हो"
 
 #. module: account
 #: model:account.tax,name:account.1_sale_export_tax_template
@@ -2693,8 +2675,9 @@ msgstr "अकाउंट प्रीफ़िक्स"
 
 #. module: account
 #: model:account.account,name:account.2_account_account_us_receivable
+#, fuzzy
 msgid "Accounts Receivable"
-msgstr ""
+msgstr "अकाउंट रिसीवेबल"
 
 #. module: account
 #: model:account.account,name:account.2_account_account_us_pos_receivable
@@ -5431,8 +5414,9 @@ msgstr "कम्प्यूटेड बैलेंस"
 
 #. module: account
 #: model:account.account,name:account.2_account_account_us_computers
+#, fuzzy
 msgid "Computers"
-msgstr ""
+msgstr "कंप्यूटर"
 
 #. module: account
 #: model:ir.model,name:account.model_res_config_settings
@@ -5599,8 +5583,9 @@ msgstr ""
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_search
+#, fuzzy
 msgid "Cost of revenue"
-msgstr ""
+msgstr "रेवेन्यू की लागत"
 
 #. module: account
 #: model:account.account,description:account.2_account_account_us_postage
@@ -5642,6 +5627,16 @@ msgstr ""
 #: code:addons/account/static/src/components/upload_drop_zone/upload_drop_zone.js:0
 msgid "Could not upload files"
 msgstr "फ़ाइलों को अपलोड नहीं किया जा सका"
+
+#. module: account
+#: model:ir.model.fields,field_description:account.field_account_move_line__count_reconciled_lines
+msgid "Count Reconciled Lines"
+msgstr ""
+
+#. module: account
+#: model:ir.model.fields,field_description:account.field_account_move_line__count_reconciled_lines_excluding_exchange_diff
+msgid "Count Reconciled Lines Excluding Exchange Diff"
+msgstr ""
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_reconcile_model_form
@@ -7746,6 +7741,11 @@ msgid "Electronic Data Interchange"
 msgstr "इलेक्ट्रॉनिक डेटा इंटरचेंज"
 
 #. module: account
+#: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
+msgid "Electronic Invoicing"
+msgstr ""
+
+#. module: account
 #: model_terms:ir.ui.view,arch_db:account.portal_my_details
 msgid "Electronic format"
 msgstr "इलेक्ट्रॉनिक फ़ॉर्मैट"
@@ -8073,6 +8073,7 @@ msgid "Exchange Gain or Loss Journal"
 msgstr "एक्सचेंज लाभ या हानि जर्नल"
 
 #. module: account
+#: model:ir.model.fields,field_description:account.field_account_move_line__exchange_move_ids
 #: model:ir.model.fields,field_description:account.field_account_partial_reconcile__exchange_move_id
 msgid "Exchange Move"
 msgstr "एक्सचेंज मूव"
@@ -8372,6 +8373,16 @@ msgstr "पहली लाइन इंडेक्"
 #: model:ir.model.fields,field_description:account.field_account_resequence_wizard__first_name
 msgid "First New Sequence"
 msgstr "नहला नया सिक्वेंस"
+
+#. module: account
+#: model:ir.model.fields,field_description:account.field_account_move_line__first_reconciled_lines_id
+msgid "First Reconciled Lines"
+msgstr ""
+
+#. module: account
+#: model:ir.model.fields,field_description:account.field_account_move_line__first_reconciled_lines_excluding_exchange_diff_id
+msgid "First Reconciled Lines Excluding Exchange Diff"
+msgstr ""
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_bank_statement_line__auto_post_origin_id
@@ -10087,8 +10098,9 @@ msgstr ""
 #. module: account
 #. odoo-python
 #: code:addons/account/controllers/portal.py:0
+#, fuzzy
 msgid "Invalid token"
-msgstr ""
+msgstr "अमान्य टोकन"
 
 #. module: account
 #: model:account.account,name:account.2_account_account_us_inventory_valuation
@@ -11419,6 +11431,7 @@ msgid "Looks great!"
 msgstr "अच्छा लग रहा है!"
 
 #. module: account
+#: model:ir.model.fields.selection,name:account.selection__account_analytic_line__analytic_profitability__loss
 #: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
 msgid "Loss"
 msgstr "नुकसान"
@@ -11443,8 +11456,9 @@ msgstr "कई तरह की"
 
 #. module: account
 #: model:account.account,name:account.2_account_account_us_machines
+#, fuzzy
 msgid "Machines & Tools"
-msgstr ""
+msgstr "मशीन और टूल्स"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_bank_statement_line__made_sequence_gap
@@ -13136,6 +13150,7 @@ msgid "Owner's Current Account"
 msgstr "मालिक का मौजूदा खाता"
 
 #. module: account
+#: model_terms:ir.ui.view,arch_db:account.view_account_analytic_line_filter_inherit_account
 #: model_terms:ir.ui.view,arch_db:account.view_account_move_line_filter
 msgid "P&L Accounts"
 msgstr "P&L खाता"
@@ -13166,11 +13181,6 @@ msgstr "पीडीएफ़ फ़ाइल"
 #: model:ir.actions.report,name:account.account_invoices_without_payment
 msgid "PDF without Payment"
 msgstr "बिना पेमेंट के पीडीएफ़"
-
-#. module: account
-#: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
-msgid "PEPPOL Electronic Invoicing"
-msgstr "PEPPOL इलेक्ट्रॉनिक इनवॉइसिंग"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_config_settings__module_account_peppol
@@ -13995,8 +14005,9 @@ msgstr "कीम"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_res_company__price_difference_account_id
+#, fuzzy
 msgid "Price Difference Account"
-msgstr ""
+msgstr "मूल्य अंतर खाता"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_tax__price_include
@@ -14060,8 +14071,9 @@ msgstr ""
 
 #. module: account
 #: model:ir.model,name:account.model_product_catalog_mixin
+#, fuzzy
 msgid "Product Catalog Mixin"
-msgstr ""
+msgstr "प्रॉडक्ट कैटलॉग मिक्सिन"
 
 #. module: account
 #: model:ir.ui.menu,name:account.menu_product_product_categories
@@ -14072,6 +14084,7 @@ msgstr "प्रॉडक्ट कैटगरी"
 #: model:ir.model,name:account.model_product_category
 #: model:ir.model.fields,field_description:account.field_account_analytic_applicability__product_categ_id
 #: model:ir.model.fields,field_description:account.field_account_analytic_distribution_model__product_categ_id
+#: model:ir.model.fields,field_description:account.field_account_analytic_line__product_category
 #: model:ir.model.fields,field_description:account.field_account_invoice_report__product_categ_id
 #: model:ir.model.fields,field_description:account.field_account_move_line__product_category_id
 #: model_terms:ir.ui.view,arch_db:account.view_account_invoice_report_search
@@ -14159,6 +14172,11 @@ msgstr "प्रॉफिट अकाउंट"
 #: model:account.account,name:account.1_profit_or_loss
 #: model:account.account,name:account.2_account_account_us_profit_or_loss_appropriation
 msgid "Profit or Loss Appropriation"
+msgstr ""
+
+#. module: account
+#: model:ir.model.fields,field_description:account.field_account_analytic_line__analytic_profitability
+msgid "Profitability"
 msgstr ""
 
 #. module: account
@@ -14856,6 +14874,7 @@ msgstr ""
 #: code:addons/account/wizard/accrued_orders.py:0
 #: model:account.group,name:account.2_us_group_4
 #: model:ir.model.fields,field_description:account.field_digest_digest__kpi_account_total_revenue
+#: model:ir.model.fields.selection,name:account.selection__account_analytic_line__analytic_profitability__revenue
 #: model:ir.model.fields.selection,name:account.selection__account_automatic_entry_wizard__account_type__income
 msgid "Revenue"
 msgstr "रेवेन्यू"
@@ -15998,8 +16017,9 @@ msgstr ""
 
 #. module: account
 #: model:account.account,name:account.2_account_account_us_software
+#, fuzzy
 msgid "Software"
-msgstr ""
+msgstr "सॉफ़्टवेयर"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.validate_account_move_view
@@ -17171,16 +17191,6 @@ msgid ""
 msgstr ""
 "पेमेंट की शर्तों में कम से कम एक लाइन ऐसी होनी चाहिए जिसमें प्रतिशत दिया गया हो और सभी "
 "प्रतिशत का कुल जोड़ 100% होना ज़रूरी है।"
-
-#. module: account
-#: model:ir.model.fields,help:account.field_base_document_layout__vat
-msgid ""
-"The Tax Identification Number. Values here will be validated based on the "
-"country format. You can use '/' to indicate that the partner is not subject "
-"to tax."
-msgstr ""
-"यह टैक्स पहचान नंबर हैय आप जो भी नंबर डालेंगे, उसकी जांच देश के नियमों के हिसाब से होगी. "
-"अगर कोई पार्टनर टैक्स नहीं देता, तो आप '/' का निशान लगा सकते हैं।"
 
 #. module: account
 #. odoo-python
@@ -18940,8 +18950,9 @@ msgstr ""
 
 #. module: account
 #: model:account.group,name:account.2_us_group_661
+#, fuzzy
 msgid "Travel Expenses"
-msgstr ""
+msgstr "यात्रा से जुड़े खर्च"
 
 #. module: account
 #: model:account.account,description:account.2_account_account_us_public_transportation
@@ -19037,6 +19048,11 @@ msgstr ""
 "दोबारा क्रम में लगाना चाहेंगे।"
 
 #. module: account
+#: model:ir.model.fields.selection,name:account.selection__account_analytic_line__analytic_profitability__uncategorized
+msgid "Uncategorized"
+msgstr ""
+
+#. module: account
 #. odoo-python
 #: code:addons/account/models/account_journal.py:0
 msgid "Undefined Yet"
@@ -19086,8 +19102,9 @@ msgstr "यूनिट प्राइस:"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.report_invoice_document
+#, fuzzy
 msgid "Units"
-msgstr ""
+msgstr "यूनिट"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.res_config_settings_view_form
@@ -20024,6 +20041,11 @@ msgid ""
 msgstr ""
 
 #. module: account
+#: model:ir.model.fields,help:account.field_base_document_layout__vat
+msgid "You can use '/' to indicate that the customer has no Tax ID."
+msgstr ""
+
+#. module: account
 #. odoo-python
 #: code:addons/account/models/account_move.py:0
 msgid "You can't block a paid invoice."
@@ -20473,6 +20495,13 @@ msgid ""
 "already been used to make accounting entries."
 msgstr ""
 "अगर किसी करेंसी में पहले से कोई एंट्री हो चुकी है, तो आप उसके दशमलव अंक कम नहीं कर सकते।"
+
+#. module: account
+#. odoo-python
+#: code:addons/account/models/account_move.py:0
+#: code:addons/account/wizard/account_payment_register.py:0
+msgid "You cannot register payments for blocked invoices."
+msgstr ""
 
 #. module: account
 #. odoo-python
@@ -21133,12 +21162,6 @@ msgstr ""
 "डिलीवरी' से भेजे गए पत्र द्वारा देनी होगी।"
 
 #. module: account
-#. odoo-python
-#: code:addons/account/models/partner.py:0
-msgid "not applicable"
-msgstr "लागू नहीं"
-
-#. module: account
 #: model:ir.model.fields.selection,name:account.selection__account_tax_repartition_line__repartition_type__tax
 msgid "of tax"
 msgstr "टैक्स"
@@ -21376,6 +21399,29 @@ msgid ""
 "{{ object.company_id.name }} Self-billing invoice (Ref {{ object.name or 'n/"
 "a' }})"
 msgstr ""
+
+#~ msgid "PEPPOL Electronic Invoicing"
+#~ msgstr "PEPPOL इलेक्ट्रॉनिक इनवॉइसिंग"
+
+#~ msgid "%s, or / if not applicable"
+#~ msgstr "%s, या / अगर लागू नहीं हो"
+
+#~ msgid "%s, or not applicable"
+#~ msgstr "%s, या लागू नहीं हो"
+
+#~ msgid "/ if not applicable"
+#~ msgstr "/ अगर लागू नहीं हो"
+
+#~ msgid ""
+#~ "The Tax Identification Number. Values here will be validated based on the "
+#~ "country format. You can use '/' to indicate that the partner is not "
+#~ "subject to tax."
+#~ msgstr ""
+#~ "यह टैक्स पहचान नंबर हैय आप जो भी नंबर डालेंगे, उसकी जांच देश के नियमों के हिसाब से "
+#~ "होगी. अगर कोई पार्टनर टैक्स नहीं देता, तो आप '/' का निशान लगा सकते हैं।"
+
+#~ msgid "not applicable"
+#~ msgstr "लागू नहीं"
 
 #~ msgid "Quick search: %s"
 #~ msgstr "क्विक सर्च: %s"

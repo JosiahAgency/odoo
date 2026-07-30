@@ -1360,6 +1360,38 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
             {'analytic_distribution': False},
         ])
 
+    def test_out_invoice_cash_rounding_multi_company(self):
+        # profit_account_id / loss_account_id are company-dependent: when the
+        # invoice belongs to another company than the active one, the rounding
+        # line must use the accounts of the invoice's company.
+        company_data_2 = self.company_data_2
+        self.cash_rounding_a.with_company(company_data_2['company']).write({
+            'profit_account_id': company_data_2['default_account_revenue'].id,
+            'loss_account_id': company_data_2['default_account_expense'].id,
+        })
+
+        self.assertEqual(self.env.company, self.company_data['company'])
+        move = self.env['account.move'].create({
+            'move_type': 'out_invoice',
+            'company_id': company_data_2['company'].id,
+            'partner_id': self.partner_a.id,
+            'invoice_cash_rounding_id': self.cash_rounding_a.id,
+            'invoice_line_ids': [Command.create({
+                'product_id': self.product_a.id,
+                'quantity': 1,
+                'price_unit': 100.42,
+                'tax_ids': [],
+            })],
+        })
+
+        rounding_line = move.line_ids.filtered(lambda line: line.display_type == 'rounding')
+        self.assertTrue(rounding_line, "A cash rounding line should have been added.")
+        self.assertEqual(
+            rounding_line.account_id,
+            company_data_2['default_account_revenue'],
+            "The rounding line must use the profit / loss account depending on the move's company.",
+        )
+
     def test_out_invoice_line_onchange_cash_rounding_1(self):
         # Required for `invoice_cash_rounding_id` to be visible in the view
         self.env.user.group_ids += self.env.ref('account.group_cash_rounding')
@@ -4114,10 +4146,18 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
 
         (valid_invoice + invalid_invoice_1 + invalid_invoice_2).auto_post = 'at_date'
 
-        with self.enter_registry_test_mode():
+        with (
+            self.enter_registry_test_mode(),
+            patch('odoo.addons.base.models.ir_cron.IrCron._reschedule_asap') as reschedule_asap,
+        ):
             self.env.ref('account.ir_cron_auto_post_draft_entry').method_direct_trigger()
+            # No retries for batches with failed moves
+            reschedule_asap.assert_not_called()
+
         self.assertEqual(valid_invoice.state, 'posted')
         self.assertEqual(invalid_invoice_1.state, 'draft')
+        self.assertEqual(invalid_invoice_1.auto_post, 'no')
+        self.assertEqual(invalid_invoice_2.auto_post, 'no')
 
         self.assertTrue(any(
             message.body == (
@@ -4569,6 +4609,7 @@ class TestAccountMoveOutInvoiceOnchanges(AccountTestInvoicingCommon):
         move = self.env['account.move'].create({
             'move_type': 'out_invoice',
             'partner_id': self.partner_a.id,
+            'invoice_payment_term_id': self.env.ref('account.account_payment_term_advance_60days').id,
             'invoice_line_ids': [
                 Command.create({
                     'name': 'invoice_line',

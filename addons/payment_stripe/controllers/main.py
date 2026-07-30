@@ -52,6 +52,9 @@ class StripeController(http.Controller):
         except ValidationError:
             _logger.error("Failed to process the return from Stripe.")
         else:
+            if tx_sudo.reference != response_content["description"]:
+                _logger.warning("Received payment data with incorrect reference")
+                raise Forbidden()
             if tx_sudo.operation != 'validation':
                 self._include_payment_intent_in_payment_data(response_content, data)
             else:
@@ -196,7 +199,7 @@ class StripeController(http.Controller):
         webhook_secret = stripe_utils.get_webhook_secret(tx_sudo.provider_id)
         if not webhook_secret:
             _logger.warning("ignored webhook event due to undefined webhook secret")
-            return
+            raise Forbidden()
 
         notification_payload = request.httprequest.data.decode('utf-8')
         signature_entries = request.httprequest.headers['Stripe-Signature'].split(',')

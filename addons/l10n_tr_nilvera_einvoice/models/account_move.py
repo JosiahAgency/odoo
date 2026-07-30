@@ -1,4 +1,5 @@
 import uuid
+from base64 import b64decode
 from dateutil.relativedelta import relativedelta
 from markupsafe import Markup
 from urllib.parse import quote, urlencode, urlparse
@@ -87,7 +88,7 @@ class AccountMove(models.Model):
                 move.message_post(body=_("To preserve accounting integrity and comply with legal requirements, invoices cannot be reused once an error occurs. Please create a new invoice to continue."))
             elif move.l10n_tr_nilvera_send_status != 'not_sent':
                 raise UserError(_("You cannot reset to draft an entry that has been sent to Nilvera."))
-        super().button_draft()
+        return super().button_draft()
 
     def _post(self, soft=True):
         for move in self:
@@ -363,7 +364,7 @@ class AccountMove(models.Model):
             'name': filename,
             'res_id': invoice.id,
             'res_model': 'account.move',
-            'datas': response,
+            'raw': b64decode(response),
             'type': 'binary',
             'mimetype': 'application/pdf',
         })
@@ -455,7 +456,7 @@ class AccountMove(models.Model):
 
     def _cron_nilvera_get_invoice_status(self):
         invoices_to_update = self.env['account.move'].search([
-            ('l10n_tr_nilvera_send_status', 'in', ['waiting', 'sent']),
+            ('l10n_tr_nilvera_send_status', 'in', ['waiting', 'sent', 'unknown']),
             ('move_type', 'in', self._l10n_tr_types_to_update_status()),
         ])
         invoices_to_update._l10n_tr_nilvera_get_submitted_document_status()

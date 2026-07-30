@@ -1,12 +1,12 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
+from collections import defaultdict
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command, Domain
 from odoo.tools import float_compare
 from odoo.tools.misc import clean_context, OrderedSet
-
-from collections import defaultdict
 
 
 class MrpBom(models.Model):
@@ -403,13 +403,16 @@ class MrpBom(models.Model):
             return bom_by_product
 
         boms = self.search(domain, order='sequence, product_id, id')
-
-        products_ids = set(products.ids)
+        bom_by_product_tmpl = defaultdict(lambda: self.env['mrp.bom'])
         for bom in boms:
-            products_implies = bom.product_id or bom.product_tmpl_id.product_variant_ids
-            for product in products_implies:
-                if product.id in products_ids and product not in bom_by_product:
-                    bom_by_product[product] = bom
+            if bom.product_id and (bom.product_id.product_tmpl_id not in bom_by_product_tmpl) and (bom.product_id not in bom_by_product):
+                bom_by_product[bom.product_id] = bom
+            elif not bom.product_id and bom.product_tmpl_id not in bom_by_product_tmpl:
+                bom_by_product_tmpl[bom.product_tmpl_id] = bom
+
+        for product in products:
+            if product.product_tmpl_id in bom_by_product_tmpl and product not in bom_by_product:
+                bom_by_product[product] = bom_by_product_tmpl[product.product_tmpl_id]
 
         return bom_by_product
 

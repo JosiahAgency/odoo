@@ -5039,7 +5039,7 @@ test(`aggregates monetary (currency field not set)`, async () => {
         "300.00",
         "0.00",
     ]);
-    expect(`tfoot`).toHaveText("$ 0.00?");
+    expect(`tfoot`).toHaveText("$ 2,000.00?");
 });
 
 test(`aggregates monetary (currency field not set on first record)`, async () => {
@@ -5063,7 +5063,7 @@ test(`aggregates monetary (currency field not set on first record)`, async () =>
         "300.00",
         "0.00",
     ]);
-    expect(`tfoot`).toHaveText("$ 0.00?");
+    expect(`tfoot`).toHaveText("$ 2,000.00?");
 });
 
 test(`aggregates monetary with custom digits (same currency)`, async () => {
@@ -19630,4 +19630,26 @@ test(`select menu navigation with hot keys`, async () => {
 
     await contains(`.o_form_button_save`).click();
     expect(queryAllTexts(`.o_field_x2many_list .o_data_row`)).toEqual(["aab", "aac"]);
+});
+
+test("should not crash in lists with groupby node and sample data", async () => {
+    Foo._records = [];
+    Bar._fields.bar_grouped = fields.Boolean({ default: false });
+
+    await mountView({
+        type: "list",
+        resModel: "foo",
+        arch: `
+            <list sample="1" default_group_by="m2o">
+                <groupby name="m2o">
+                    <field name="bar_grouped" invisible="1" />
+                    <button type="object" name="group_btn" string="Do Something" invisible="bar_grouped"/>
+                </groupby>
+                <field name="foo"/>
+                <field name="amount"/>
+                <field name="properties"/>
+            </list>`,
+    });
+
+    expect(queryAll(".o_group_header").length).toBeGreaterThan(0);
 });

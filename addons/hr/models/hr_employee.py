@@ -71,6 +71,7 @@ class HrEmployee(models.Model):
         required=True
     )
     versions_count = fields.Integer(compute='_compute_versions_count', groups="hr.group_hr_user")
+    version_revision = fields.Char(compute="_compute_version_revision", groups="hr.group_hr_user")
 
     @api.model
     def _lang_get(self):
@@ -282,7 +283,7 @@ class HrEmployee(models.Model):
             else:
                 employee.has_multiple_bank_accounts = False
 
-    @api.depends('bank_account_ids')
+    @api.depends('bank_account_ids.active')
     def _sync_salary_distribution(self):
         for employee in self:
             current_salary_distribution = employee.salary_distribution or {}
@@ -559,9 +560,11 @@ class HrEmployee(models.Model):
         If no valid version is found, we return the very first version of the employee.
         """
         self.ensure_one()
-        active_versions = self.version_ids.filtered(lambda v: v.active)
-        versions = active_versions.filtered_domain([('date_version', '<=', date)])
-        return max(versions, key=lambda v: v.date_version) if versions else active_versions[0]
+        versions = self.version_ids.filtered(lambda v: v.active)
+        if not versions:
+            versions = self.with_context(active_test=False).version_ids
+        filtered_versions = versions.filtered_domain([('date_version', '<=', date)])
+        return max(filtered_versions, key=lambda v: v.date_version) if filtered_versions else versions[0]
 
     def create_version(self, values):
         self.ensure_one()
@@ -778,6 +781,11 @@ class HrEmployee(models.Model):
         )
         for employee in self:
             employee.versions_count = version_count_per_employee.get(employee, 0)
+
+    @api.depends('version_ids.write_date')
+    def _compute_version_revision(self):
+        for employee in self:
+            employee.version_revision = ",".join(f"{v.id},{v.write_date!s}" for v in employee.version_ids)
 
     def _search_newly_hired(self, operator, value):
         if operator not in ('in', 'not in'):
@@ -1437,6 +1445,9 @@ We can redirect you to the public employee list."""
                             bank_account.allow_out_payment = False
                         if vals['work_contact_id']:
                             bank_account.partner_id = vals['work_contact_id']
+        if 'current_version_id' in vals:
+            new_version = self.env['hr.version'].browse(vals.get('current_version_id'))
+            self.resource_id.calendar_id = new_version.resource_calendar_id
         if version_vals:
             version_vals['last_modified_date'] = fields.Datetime.now()
             version_vals['last_modified_uid'] = self.env.uid
@@ -1790,8 +1801,10 @@ We can redirect you to the public employee list."""
 
     def _get_store_avatar_card_fields(self, target):
         employee_fields = [
+            "active",
             "company_id",
             Store.One("department_id", ["name"]),
+            "user_id",
             "work_email",
             Store.One("work_location_id", ["location_type", "name"]),
             "work_phone",

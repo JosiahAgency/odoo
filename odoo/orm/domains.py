@@ -249,11 +249,12 @@ class Domain:
         try:
             for item in reversed(arg):
                 if isinstance(item, (tuple, list)) and len(item) == 3:
+                    op = item[1].lower()
                     if internal:
                         # process subdomains when processing internal operators
-                        if item[1] in ('any', 'any!', 'not any', 'not any!') and isinstance(item[2], (list, tuple)):
+                        if op in ('any', 'any!', 'not any', 'not any!') and isinstance(item[2], (list, tuple)):
                             item = (item[0], item[1], Domain(item[2], internal=True))
-                    elif item[1] in INTERNAL_CONDITION_OPERATORS:
+                    elif op in INTERNAL_CONDITION_OPERATORS:
                         # internal operators are not accepted
                         raise ValueError(f"Domain() invalid item in domain: {item!r}")
                     stack.append(Domain(*item))
@@ -954,6 +955,10 @@ class DomainCondition(Domain):
 
             # handle searchable fields
             if field.search and field.name == self.field_expr:
+                if field.type == 'boolean' and isinstance(domain := _optimize_boolean_in_all(self, model), DomainBool):
+                    # apply the tautology before trying the search method
+                    # this is a basic optimization, but for active flag it is left for later
+                    return domain
                 domain = self._optimize_field_search_method(model)
                 # The domain is optimized so that value data types are comparable.
                 # Only simple optimization to avoid endless recursion.

@@ -8,7 +8,6 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
-import os
 import threading
 import time
 import typing
@@ -27,7 +26,6 @@ from odoo.tools import (
     OrderedSet,
     config,
     gc,
-    lazy_classproperty,
     remove_accents,
     sql,
 )
@@ -93,22 +91,8 @@ class Registry(Mapping[str, type["BaseModel"]]):
     _lock: threading.RLock | DummyRLock = threading.RLock()
     _saved_lock: threading.RLock | DummyRLock | None = None
 
-    @lazy_classproperty
-    def registries(cls) -> LRU[str, Registry]:
-        """ A mapping from database names to registries. """
-        size = config.get('registry_lru_size', None)
-        if not size:
-            # Size the LRU depending of the memory limits
-            if os.name != 'posix':
-                # cannot specify the memory limit soft on windows...
-                size = 42
-            else:
-                # A registry takes 10MB of memory on average, so we reserve
-                # 10Mb (registry) + 5Mb (working memory) per registry
-                avgsz = 15 * 1024 * 1024
-                limit_memory_soft = config['limit_memory_soft'] if config['limit_memory_soft'] > 0 else (2048 * 1024 * 1024)
-                size = (limit_memory_soft // avgsz) or 1
-        return LRU(size)
+    registries = LRU[str, "Registry"](42)  # random default value
+    """ A mapping from database names to registries. """
 
     def __new__(cls, db_name: str):
         """ Return the registry for the given database name."""
@@ -479,6 +463,14 @@ class Registry(Mapping[str, type["BaseModel"]]):
 
                     models_field_depends_done.discard(model_cls)
 
+                elif model_cls._setup_done__ and field.related and field.manual:
+                    # manually-added related field (e.g. added via Studio) that has
+                    # no _base_fields__ so it cannot be partially reset; mark the
+                    # whole model for full re-setup so that setup_model_classes()
+                    # recreates the field pointing to the updated target field
+                    model_cls._setup_done__ = False
+                    models_field_depends_done.discard(model_cls)
+
                 # partial invalidation of field_depends[_context]
                 self.field_depends.pop(field, None)
                 self.field_depends_context.pop(field, None)
@@ -824,23 +816,41 @@ class Registry(Mapping[str, type["BaseModel"]]):
         if not expected:
             return
 
-        # retrieve existing indexes with their corresponding table
-        cr.execute("SELECT indexname, tablename FROM pg_indexes WHERE indexname IN %s"
-                   "   AND schemaname = current_schema",
-                   [tuple(row[0] for row in expected)])
-        existing = dict(cr.fetchall())
+        # retrieve existing indexes with their table and access method
+        cr.execute("""
+            SELECT idx.relname, tbl.relname, am.amname
+              FROM pg_index ix
+              JOIN pg_class idx ON idx.oid = ix.indexrelid
+              JOIN pg_class tbl ON tbl.oid = ix.indrelid
+              JOIN pg_am am ON am.oid = idx.relam
+             WHERE idx.relname IN %s
+               AND idx.relnamespace = current_schema::regnamespace
+        """, [tuple(row[0] for row in expected)])
+        existing = {indexname: (tablename, method) for indexname, tablename, method in cr.fetchall()}
 
         for indexname, tablename, field in expected:
             index = field.index
             assert index in ('btree', 'btree_not_null', 'trigram', True, False, None)
-            if index and indexname not in existing:
-                if index == 'trigram' and not self.has_trigram:
-                    # Ignore if trigram index is not supported
-                    continue
-                if field.translate and index != 'trigram':
-                    _schema.warning(f"Index attribute on {field!r} ignored, only trigram index is supported for translated fields")
-                    continue
 
+            if index and field.translate and index != 'trigram':
+                _schema.warning(f"Index attribute on {field!r} ignored, only trigram index is supported for translated fields")
+                continue
+
+            # whether the field should be backed by an index, and the access
+            # method (gin for trigram, btree otherwise) it is expected to use
+            will_index = bool(index) and (
+                (not field.translate and index != 'trigram')
+                or (index == 'trigram' and self.has_trigram)
+            )
+            if indexname in existing:
+                # The index exists, check if it is stale.
+                expected_method = 'gin' if index == 'trigram' else 'btree'
+                stale = existing[indexname][1] != expected_method
+                will_index &= stale  # create only when stale
+            else:
+                stale = False
+
+            if will_index:
                 column_expression = f'"{field.name}"'
                 if index == 'trigram':
                     if field.translate:
@@ -872,11 +882,13 @@ class Registry(Mapping[str, type["BaseModel"]]):
                     where = f'{column_expression} IS NOT NULL' if index == 'btree_not_null' else ''
                 try:
                     with cr.savepoint(flush=False):
+                        if stale:
+                            sql.drop_index(cr, indexname, tablename)
                         sql.create_index(cr, indexname, tablename, [expression], method, where)
                 except psycopg2.OperationalError:
                     _schema.error("Unable to add index %r for %s", indexname, self)
 
-            elif not index and tablename == existing.get(indexname):
+            elif not index and tablename == existing.get(indexname, (None, None))[0]:
                 _schema.info("Keep unexpected index %s on table %s", indexname, tablename)
 
     def add_foreign_key(
