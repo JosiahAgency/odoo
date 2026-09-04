@@ -14,6 +14,16 @@ _logger = logging.getLogger(__name__)
 class AccountEdiProxyClientUser(models.Model):
     _inherit = 'account_edi_proxy_client.user'
 
+    def _peppol_get_duplicate_message_uuids(self, message_uuids):
+        self.ensure_one()
+        duplicate_message_uuids = set(
+            self.env['account.peppol.response'].search([
+                ('peppol_message_uuid', 'in', message_uuids),
+                ('company_id', '=', self.company_id.id),
+            ]).mapped('peppol_message_uuid')
+        )
+        return duplicate_message_uuids | super()._peppol_get_duplicate_message_uuids(message_uuids)
+
     def _peppol_send_response(self, reference_moves, status, clarifications=None):
         self.ensure_one()
         clarifications = clarifications or []
@@ -48,19 +58,37 @@ class AccountEdiProxyClientUser(models.Model):
                 bodies={move.id: log_message for move in reference_moves},
             )
         else:
-            self.env['account.peppol.response'].create([{
+            responses = self.env['account.peppol.response'].create([{
                     'peppol_message_uuid': message['message_uuid'],
                     'response_code': status,
                     'peppol_state': 'processing',
                     'move_id': move.id,
                 }
                 for message, move in zip(response.get('messages'), reference_moves)
+                if message.get('message_uuid')
             ])
-            log_message = self.env._(
-                "A Peppol response was sent to the Peppol Access Point declaring you %(status)s this document.",
-                status=self.env._('received') if status == 'AB' else self.env._('accepted') if status == 'AP' else self.env._('rejected'),
+
+            sent_moves = responses.move_id
+            unsent_moves = reference_moves - sent_moves
+
+            status_string = (
+                self.env._('received') if status == 'AB'
+                else self.env._('accepted') if status == 'AP'
+                else self.env._('rejected')
             )
-            reference_moves._message_log_batch(bodies={move.id: log_message for move in reference_moves})
+            sent_message = self.env._(
+                "A Peppol response was sent to the Peppol Access Point declaring you %(status)s this document.",
+                status=status_string,
+            )
+            unsent_message = self.env._(
+                "A Peppol response declaring you %(status)s this document could not be sent to the Peppol Access Point.",
+                status=status_string,
+            )
+            message_bodies = {
+                **{move.id: sent_message for move in sent_moves},
+                **{move.id: unsent_message for move in unsent_moves},
+            }
+            reference_moves._message_log_batch(bodies=message_bodies)
 
     @api.model
     def _peppol_extract_response_info(self, document):

@@ -104,17 +104,17 @@ describe("should open a popover", () => {
         await animationFrame();
         expect(queryOne(".o-we-linkpopover").parentElement).toHaveAttribute("style", style);
     });
-    test("link popover should close when clicking on a contenteditable false element", async () => {
+    test("link popover should update when clicking on a different link", async () => {
         await setupEditor(
-            '<p><a href="http://test.test/">li[]nk</a> <a contenteditable="false">uneditable link</a></p>'
+            '<p><a href="http://a.com/">li[]nk</a> <a contenteditable="false" href="http://b.com/">uneditable link</a></p>'
         );
         await waitFor(".o-we-linkpopover");
-        expect(".o-we-linkpopover").toHaveCount(1);
-        // click on an uneditable element
-        const nodeEl = queryOne("a[contenteditable='false']");
+        expect(`.o-we-linkpopover a[href="http://a.com/"]`).toHaveCount(1);
+        // click on the second link, the popover should update, not disappear
+        const nodeEl = queryOne(`a[href="http://b.com/"]`);
         setSelection({ anchorNode: nodeEl, anchorOffset: 0 });
-        await waitForNone(".o-we-linkpopover", { timeout: 1500 });
-        expect(".o-we-linkpopover").toHaveCount(0);
+        await waitFor(`.o-we-linkpopover a[href="http://b.com/"]`);
+        expect(`.o-we-linkpopover a[href="http://b.com/"]`).toHaveCount(1);
     });
 });
 
@@ -1787,7 +1787,9 @@ describe("upload file via link popover", () => {
         await expectElementCount(".o_notification_manager .o_notification", 0);
         await mockedUpload;
         await tick();
-        expect(getContent(el)).toBe(`<p o-we-hint-text='Type "/" for commands' class="o-we-hint">[]<br></p>`);
+        expect(getContent(el)).toBe(
+            `<p o-we-hint-text='Type "/" for commands' class="o-we-hint">[]<br></p>`
+        );
     });
 });
 
@@ -2068,4 +2070,34 @@ test("Should properly show the preview if fetching metadata fails", async () => 
     const { el } = await setupEditor('<p><a href="/contactus">a[]b</a></p>');
     await waitFor(".o-we-linkpopover");
     expect(cleanLinkArtifacts(getContent(el))).toBe('<p><a href="/contactus">a[]b</a></p>');
+});
+
+test("Should open link popover in read only mode when link is not editable", async () => {
+    onRpc("/html_editor/link_preview_internal", () => ({}));
+    onRpc("/link", () => ({}));
+    await setupEditor('<p><a contenteditable="false" href="/link">link</a></p>');
+    await click(queryOne(`a[contenteditable="false"]`));
+    await waitFor(".o-we-linkpopover");
+    expect(".o_we_edit_link").toHaveCount(0);
+});
+
+test("should hide title replace icon on popover for an image link", async () => {
+    const { el } = await setupEditor(`<p>[<img src="${base64Img}">]</p>`);
+    await click("img");
+    await waitFor(".o-we-toolbar");
+    await click('.o-we-toolbar button[name="link"]');
+    await expectElementCount(".o-we-linkpopover", 1);
+    await contains(".o-we-linkpopover input.o_we_href_input_link").edit("http://test.com/");
+    expect(cleanLinkArtifacts(getContent(el))).toBe(
+        `<p><a href="http://test.com/"><img src="${base64Img}">[]</a></p>`
+    );
+    expect(".o-we-linkpopover .o_we_replace_title_btn").toHaveCount(0);
+});
+
+test("should hide title replace icon on popover for a link with image", async () => {
+    await setupEditor(
+        `<p><a href="https://google.com">https://google.c[]om<img src="${base64Img}"></a></p>`
+    );
+    await expectElementCount(".o-we-linkpopover", 1);
+    expect(".o-we-linkpopover .o_we_replace_title_btn").toHaveCount(0);
 });

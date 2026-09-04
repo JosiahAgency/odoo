@@ -108,7 +108,7 @@ class AccountEdiUBLPint(models.AbstractModel):
         super()._ubl_add_buyer_reference_node(vals)
 
         customer = vals['customer']
-        if customer_ref := customer.commercial_partner_id.ref:
+        if customer_ref := customer.ref or customer.commercial_partner_id.ref:
             vals['document_node']['cbc:BuyerReference']['_text'] = customer_ref
 
     def _ubl_add_billing_reference_nodes(self, vals):
@@ -419,3 +419,20 @@ class AccountEdiUBLPint(models.AbstractModel):
         AccountTax._round_raw_gross_total_excluded_and_discount(vals['base_lines'], company, in_foreign_currency=False)
 
         return vals
+
+    # -------------------------------------------------------------------------
+    # IMPORT
+    # -------------------------------------------------------------------------
+
+    def _import_prepare_missing_customer_create_values(self, collected_values):
+        partner_create_values = super()._import_prepare_missing_customer_create_values(collected_values)
+
+        customer_values = collected_values['customer_values']
+        if (
+                (peppol_eas := customer_values.get('peppol_eas'))
+                and (peppol_endpoint := customer_values.get('peppol_endpoint'))
+        ):
+            partner_create_values['peppol_eas'] = peppol_eas
+            partner_create_values['peppol_endpoint'] = peppol_endpoint
+
+        return partner_create_values
