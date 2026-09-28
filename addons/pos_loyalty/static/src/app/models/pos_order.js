@@ -223,6 +223,28 @@ patch(PosOrder.prototype, {
         this._code_activated_coupon_ids = [["clear"]];
     },
     /**
+     * `_code_activated_coupon_ids` is a local field: it is lost when the order is
+     * rebuilt from the server or from IndexedDB, while the reward lines it justified
+     * are persisted with their `coupon_id`. Re-link those coupons so that
+     * `_updateRewardLines` does not consider their rewards unclaimed and delete them.
+     */
+    _restoreCodeActivatedCoupons() {
+        for (const line of this._get_reward_lines()) {
+            const coupon = line.coupon_id;
+            if (
+                !coupon ||
+                coupon.id <= 0 ||
+                !coupon.program_id ||
+                coupon.program_id.is_nominative ||
+                this.uiState.couponPointChanges[coupon.id] ||
+                this._code_activated_coupon_ids.some((c) => c.id === coupon.id)
+            ) {
+                continue;
+            }
+            this._code_activated_coupon_ids = [["link", coupon]];
+        }
+    },
+    /**
      * Refreshes the currently applied rewards, if they are not applicable anymore they are removed.
      */
     _updateRewardLines() {
@@ -1191,6 +1213,8 @@ patch(PosOrder.prototype, {
             return _t("Unknown discount type");
         }
         let { discountable, discountablePerTax } = getDiscountable(reward);
+        // Other discounts may already cover part of the discountable lines
+        const totalFactor = discountable > 0 ? Math.min(1, this.priceIncl / discountable) : 1;
         discountable = Math.min(this.priceIncl, discountable);
         if (floatIsZero(discountable)) {
             return [];
@@ -1261,7 +1285,7 @@ patch(PosOrder.prototype, {
 
             lst.push({
                 product_id: discountProduct,
-                price_unit: -(Math.min(this.priceIncl, entry[1]) * discountFactor),
+                price_unit: -(entry[1] * totalFactor * discountFactor),
                 qty: 1,
                 reward_id: reward,
                 is_reward_line: true,

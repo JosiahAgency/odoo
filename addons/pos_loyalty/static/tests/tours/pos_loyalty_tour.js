@@ -644,7 +644,8 @@ registry.category("web_tour.tours").add("test_refund_does_not_decrease_points", 
             Chrome.startPoS(),
             Dialog.confirm("Open Register"),
             ProductScreen.clickPartnerButton(),
-            ProductScreen.clickCustomer("Refunding Guy", true),
+            PartnerList.searchCustomerValue("Refunding Guy", true),
+            ProductScreen.clickCustomer("Refunding Guy"),
             ProductScreen.clickDisplayedProduct("Refund Product"),
             ProductScreen.clickControlButton("Reward"),
             SelectionPopup.has("$ 1 per point on your order", { run: "click" }),
@@ -848,5 +849,20 @@ registry.category("web_tour.tours").add("test_reward_line_tax_grouping_key", {
             PaymentScreen.clickPaymentMethod("Cash"),
             PaymentScreen.clickValidate(),
             ReceiptScreen.isShown(),
+        ].flat(),
+});
+
+registry.category("web_tour.tours").add("PosLoyaltySpecificDiscountNegativeLine", {
+    steps: () =>
+        [
+            Chrome.startPoS(),
+            Dialog.confirm("Open Register"),
+            ProductScreen.addOrderline("Product A", "1"),
+            ProductScreen.addOrderline("Voucher", "1"),
+            // 50 shared over 1000 - 100: both tax groups get the same 5.56% factor
+            PosLoyalty.hasRewardLine("on specific products", "-55.56"),
+            PosLoyalty.hasRewardLine("on specific products", "5.56"),
+            PosLoyalty.orderTotalIs("850.00"),
+            PosLoyalty.finalizeOrder("Cash", "850"),
         ].flat(),
 });

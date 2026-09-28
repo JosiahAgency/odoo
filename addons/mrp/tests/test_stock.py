@@ -297,11 +297,16 @@ class TestWarehouseMrp(common.TestMrpCommon):
         change_qty.change_prod_qty()
         self.assertEqual(len(mo_laptop.move_finished_ids.move_line_ids), 2)
         mo_laptop.action_generate_serial()
+        self.env['change.production.qty'].create({
+            'mo_id': mo_laptop.id,
+            'product_qty': 4,
+        }).change_prod_qty()
+        self.assertEqual(len(mo_laptop.move_finished_ids.move_line_ids), 3)
         mo_laptop.button_mark_done()
         self.assertEqual(mo_laptop.state, 'done')
         move_lines = mo_laptop.move_finished_ids.move_line_ids
         self.assertTrue(all(ml.lot_id == mo_laptop.lot_producing_ids for ml in move_lines))
-        self.assertEqual(sum(move_lines.mapped('quantity')), 3)
+        self.assertEqual(sum(move_lines.mapped('quantity')), 4)
 
     def test_backorder_unpacking(self):
         """ Test that movement of pack in backorder is correctly handled. """
@@ -373,6 +378,19 @@ class TestWarehouseMrp(common.TestMrpCommon):
         self.assertFalse(self.warehouse_1.pbm_mto_pull_id.active)
         self.assertFalse(self.warehouse_1.pbm_mto_pull_id.location_dest_id.active)
         self.assertNotIn(self.warehouse_1.pbm_mto_pull_id, self.route_mto.rule_ids)
+
+    def test_manufacturing_putaway_after_manual_reservation(self):
+        """Test the putaway of the produced product after manually reserving
+        the components following an unreservation."""
+        self.laptop.tracking = 'lot'
+        mo = self.new_mo_laptop()
+        mo.do_unreserve()
+        mo.move_raw_ids.move_line_ids = [Command.create({
+            'product_id': self.graphics_card.id,
+            'quantity': 1,
+        })]
+        mo.button_mark_done()
+        self.assertEqual(mo.move_finished_ids.move_line_ids.location_dest_id, self.depot_location)
 
 
 class TestKitPicking(common.TestMrpCommon):
