@@ -3,9 +3,11 @@
 # ruff: noqa: F821
 # (ruff don't see read variables from release.py)
 
-from setuptools import find_namespace_packages, setup
-from os.path import join, dirname
+from os.path import dirname
+from os.path import join
 
+from setuptools import find_namespace_packages
+from setuptools import setup
 
 exec(open(join(dirname(__file__), 'odoo', 'release.py'), 'rb').read())  # Load release variables
 lib_name = 'odoo'
