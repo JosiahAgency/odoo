@@ -3,6 +3,7 @@
 import re
 import logging
 from datetime import timedelta
+from markupsafe import Markup
 
 from odoo import _, api, fields, models, modules, tools
 from odoo.exceptions import UserError
@@ -274,8 +275,22 @@ class Account_Edi_Proxy_ClientUser(models.Model):
         try:
             move._extend_with_attachments(files_data, new=True)
             move._autopost_bill()
-        except Exception:
-            _logger.exception("Unexpected error occurred during the import of bill with id %s", move.id)
+        except Exception as err:
+            _logger.exception(
+                "Unexpected error occurred during the import of bill with id %s (%s uuid: %s, attachment: %s)",
+                move.id, self.proxy_type, uuid, attachment.id,
+            )
+            move._message_log(
+                body=Markup("%s<br/>%s") % (
+                    self.env._(
+                        "Error importing %(proxy_type)s document (UUID: %(uuid)s):",
+                        proxy_type=dict(self._fields['proxy_type']._description_selection(self.env))[self.proxy_type],
+                        uuid=uuid,
+                    ),
+                    str(err)
+                ),
+                attachment_ids=attachment.ids,
+            )
         attachment.write({'res_model': 'account.move', 'res_id': move.id})
         return {'uuid': uuid, 'move': move}
 
@@ -297,7 +312,8 @@ class Account_Edi_Proxy_ClientUser(models.Model):
             'domain': {
                 'direction': 'incoming',
                 'errors': False,
-            }
+            },
+            'limit': job_count,
         }
         for edi_user in self:
             edi_user = edi_user.with_company(edi_user.company_id)
@@ -321,6 +337,7 @@ class Account_Edi_Proxy_ClientUser(models.Model):
                 continue
 
             received_messages = messages.get('messages', [])
+            has_more = messages.get('has_more', False)
             # Edge case: self-addressed messages (sender == receiver), i.e. a company genuinely
             # invoicing itself. The outgoing invoice already carries the message UUID, so the
             # duplicate check would wrongly discard the incoming document.
@@ -348,8 +365,7 @@ class Account_Edi_Proxy_ClientUser(models.Model):
             if not message_uuids:
                 continue
 
-            need_retrigger = need_retrigger or len(message_uuids) > job_count
-            message_uuids = message_uuids[:job_count]
+            need_retrigger = need_retrigger or has_more
 
             # retrieve attachments for filtered messages
             all_messages = edi_user._call_peppol_proxy(

@@ -707,6 +707,8 @@ class Website(models.Model):
     @api.model
     def configurator_skip(self):
         website = self.get_current_website()
+        if website.configurator_done:
+            return website.button_go_website()
         theme = self.env["ir.module.module"].search([("name", "=", "theme_default")])
         website.configurator_done = True
         return theme.button_choose_theme()
@@ -2070,13 +2072,13 @@ class Website(models.Model):
         fuzzy_term = False
         search_details = self._search_get_details(search_type, order, options)
         if search and options.get('allowFuzzy', True):
-            fuzzy_term = self._search_find_fuzzy_term(search_details, search)
-            if fuzzy_term:
-                count, results = self._search_exact(search_details, fuzzy_term, limit, order)
-                if fuzzy_term.lower() == search.lower():
+            count, results = self._search_exact(search_details, search, limit, order)
+            if not count:
+                fuzzy_term = self._search_find_fuzzy_term(search_details, search)
+                if fuzzy_term and fuzzy_term.lower() != search.lower():
+                    count, results = self._search_exact(search_details, fuzzy_term, limit, order)
+                else:
                     fuzzy_term = False
-            else:
-                count, results = self._search_exact(search_details, search, limit, order)
         else:
             count, results = self._search_exact(search_details, search, limit, order)
         return count, results, fuzzy_term

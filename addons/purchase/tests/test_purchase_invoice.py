@@ -830,6 +830,72 @@ class TestPurchaseToInvoice(TestPurchaseToInvoiceCommon):
         self.assertEqual(analytic_account.purchase_order_count, 1)
         self.assertEqual(analytic_account.action_view_purchase_orders()['domain'], [['id', 'in', purchase_order.ids]])
 
+    def test_invoice_line_name_partner_specific_code_not_duplicated(self):
+        """When a vendor has their own product code (product.supplierinfo),
+        the purchase order line description uses it (e.g. "[CUSTOM-CODE] Product").
+        Billing must not re-resolve the product's display_name without that
+        vendor in context, or it would find a different string ("[DEFAULT-CODE]
+        Product") and prepend it, duplicating the product name on the bill.
+        """
+        self.env['product.supplierinfo'].create({
+            'partner_id': self.partner_a.id,
+            'product_tmpl_id': self.product_order.product_tmpl_id.id,
+            'product_code': 'CUSTOM-CODE',
+        })
+        po = self.init_purchase(partner=self.partner_a, confirm=True, products=[self.product_order])
+        # The Form above goes through the same onchange as the web client, so
+        # the line description already carries the vendor-specific code.
+        self.assertIn('CUSTOM-CODE', po.order_line.name)
+        po.order_line.qty_received = 1
+
+        bill = self.env['account.move'].browse(po.action_create_invoice()['res_id'])
+        self.assertEqual(
+            bill.invoice_line_ids.name, po.order_line.name,
+            "Billing shouldn't duplicate the product name when the order line "
+            "already used a vendor-specific product code",
+        )
+
+    def test_invoice_line_name_standard_code_not_duplicated(self):
+        """A purchase order line created before the vendor has their own
+        product code keeps the standard product name. Billing must not
+        prepend the vendor-specific name added afterwards.
+        """
+        po = self.init_purchase(partner=self.partner_a, confirm=True, products=[self.product_order])
+        self.env['product.supplierinfo'].create({
+            'partner_id': self.partner_a.id,
+            'product_tmpl_id': self.product_order.product_tmpl_id.id,
+            'product_code': 'CUSTOM-CODE',
+        })
+        self.assertNotIn('CUSTOM-CODE', po.order_line.name)
+        po.order_line.qty_received = 1
+
+        bill = self.env['account.move'].browse(po.action_create_invoice()['res_id'])
+        self.assertEqual(bill.invoice_line_ids.name, po.order_line.name)
+
+    def test_invoice_line_name_expired_vendor_code_not_duplicated(self):
+        """When the vendor has several product codes, the purchase order line
+        description only uses the one of the selected seller. Billing must
+        resolve the same seller instead of joining every vendor code, or the
+        product name gets duplicated on the bill.
+        """
+        self.env['product.supplierinfo'].create([{
+            'partner_id': self.partner_a.id,
+            'product_tmpl_id': self.product_order.product_tmpl_id.id,
+            'product_code': 'OLD',
+            'date_end': fields.Date.today() - timedelta(days=10),
+        }, {
+            'partner_id': self.partner_a.id,
+            'product_tmpl_id': self.product_order.product_tmpl_id.id,
+            'product_code': 'NEW',
+        }])
+        po = self.init_purchase(partner=self.partner_a, confirm=True, products=[self.product_order])
+        self.assertIn('[NEW]', po.order_line.name)
+        self.assertNotIn('[OLD]', po.order_line.name)
+        po.order_line.qty_received = 1
+
+        bill = self.env['account.move'].browse(po.action_create_invoice()['res_id'])
+        self.assertEqual(bill.invoice_line_ids.name, po.order_line.name)
+
 
 @tagged('post_install', '-at_install')
 class TestInvoicePurchaseMatch(TestPurchaseToInvoiceCommon):
@@ -887,6 +953,29 @@ class TestInvoicePurchaseMatch(TestPurchaseToInvoiceCommon):
         """
         po = self.init_purchase(confirm=True, products=[self.product_order])
         invoice = self.init_invoice('in_invoice', partner=self.partner_a, products=[self.product_order, self.service_order])
+
+        invoice._find_and_set_purchase_orders(
+            ['my_match_reference'], invoice.partner_id.id, invoice.amount_total, from_ocr=False)
+
+        self.assertTrue(invoice.id in po.invoice_ids.ids)
+        invoice_lines = invoice.line_ids.filtered(lambda l: l.price_unit)
+        self.assertEqual(len(invoice_lines), 2)
+        for line in po.order_line:
+            self.assertTrue(line in invoice_lines.purchase_line_id)
+
+    def test_subset_match_from_edi_partial_po_within_precision(self):
+        """A line of the invoice totally matches a 1-line purchase order despite
+        a slight unit price difference due to decimal precision issues
+        """
+        po = self.init_purchase(confirm=True, products=[self.product_order])
+        invoice = self.init_invoice('in_invoice', partner=self.partner_a, products=[self.product_order, self.service_order])
+
+        # Simulate a slight difference in unit_price due to decimal precision issues
+        # for example when when receiving an invoice in XML or OCR
+        po_line = po.order_line[0]
+        product_line = invoice.invoice_line_ids.filtered(lambda l: l.product_id == self.product_order)
+        product_line.price_unit = po_line.price_unit + 0.0000001
+        self.assertNotEqual(product_line.price_unit, po_line.price_unit)
 
         invoice._find_and_set_purchase_orders(
             ['my_match_reference'], invoice.partner_id.id, invoice.amount_total, from_ocr=False)

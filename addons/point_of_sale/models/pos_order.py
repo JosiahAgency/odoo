@@ -1551,9 +1551,8 @@ class PosOrder(models.Model):
             '&',
             ('state', '!=', 'draft'),
             ('is_refund', '=', True),
-            ('config_id', 'in', [config_id] + pos_config.trusted_config_ids.ids),
             ('config_id.currency_id', '=', pos_config.currency_id.id)
-        ])
+        ]) & pos_config._get_paid_orders_config_domain()
         orders = self.search(paid_order_domain, limit=limit, offset=offset, order='create_date desc')
         PosOrderLineModel = self.env['pos.order.line']
         line_queries = [
@@ -1937,7 +1936,7 @@ class PosOrderLine(models.Model):
             moves = line._get_stock_moves_to_consider(stock_moves, product) if stock_moves else None
             if moves and line._is_product_storable_fifo_avco():
                 product_cost = line._get_product_cost_with_moves(moves)
-                if cost_currency.is_zero(product_cost) and line.order_id.shipping_date:
+                if cost_currency.is_zero(product_cost) and not sum(m._get_valued_qty() for m in moves):
                     if line.refunded_orderline_id:
                         product_cost = line.refunded_orderline_id.total_cost / line.refunded_orderline_id.qty
                     else:

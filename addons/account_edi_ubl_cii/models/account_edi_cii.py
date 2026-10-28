@@ -38,13 +38,24 @@ class AccountEdiCii(models.AbstractModel):
             vals['supplier'], vals['customer'] = vals['customer'], vals['supplier']
             vals['partner_shipping'] = vals['customer'].child_ids.filtered(lambda p: p.type == 'delivery')[:1] or vals['customer']
 
-        self._cii_add_values_delivery_date(vals, invoice.delivery_date or invoice.invoice_date)
-
         vals['base_lines'], vals['tax_lines'] = invoice._get_rounded_base_and_tax_lines()
 
         self._turn_price_unit_positive(vals)
         self._cii_extract_cash_rounding_lines(vals)
         self._cii_extract_early_pay_discount_lines(vals)
+
+        # [BR-IC-11] An intra-community supply needs a delivery date (BT-72) or an invoicing period (BG-14).
+        # The invoicing period is only exported when every line has a start and an end date: it then goes from the
+        # earliest start to the latest end, so that it contains every line period (PEPPOL-EN16931-R110/R111), and
+        # the delivery date is not needed. The due date is never used: it is a payment deadline, not a period end.
+        line_periods = [(base_line.get('deferred_start_date'), base_line.get('deferred_end_date')) for base_line in vals['base_lines']]
+        if line_periods and all(start_date and end_date for start_date, end_date in line_periods):
+            start_dates, end_dates = zip(*line_periods)
+            self._cii_add_values_billing_dates(vals, min(start_dates), max(end_dates))
+            self._cii_add_values_delivery_date(vals, None)
+        else:
+            self._cii_add_values_billing_dates(vals, None, None)
+            self._cii_add_values_delivery_date(vals, invoice.delivery_date or invoice.invoice_date)
 
         AccountTax = self.env['account.tax']
         AccountTax._round_raw_total_excluded(vals['base_lines'], invoice.company_id)
@@ -273,16 +284,22 @@ class AccountEdiCii(models.AbstractModel):
 
     def _cii_get_line_specified_trade_product_node(self, vals, base_line):
         product = base_line['product_id']
+        line_name = base_line['name'] or ''
+        name, description = line_name, None
+        if product:
+            line_without_name = line_name.removeprefix(f'{product.display_name}\n')
+            if line_without_name != line_name:
+                name, description = product.display_name, line_without_name.strip()
         return {
             'ram:GlobalID': {
                 '_text': product.barcode,
                 'schemeID': "0160",
             } if product.barcode else None,
             'ram:SellerAssignedID': {'_text': product.default_code} if product.default_code else None,
-            'ram:Name': {'_text': base_line['name']},
+            'ram:Name': {'_text': name},
             'ram:Description': {
-                '_text': html2plaintext(product.description),
-            } if product.description else None,
+                '_text': description,
+            } if description else None,
         }
 
     def _cii_get_gross_price_product_trade_price_node(self, vals, base_line):
@@ -462,6 +479,11 @@ class AccountEdiCii(models.AbstractModel):
             },
         }
 
+    def _cii_is_vat_void(self, vat):
+        """Whether `vat` is one of Odoo's conventional values meaning "not subject to VAT"
+        (as opposed to a real, missing, or invalid VAT number)."""
+        return not vat or vat in ['/', 'na', 'NA']
+
     def _cii_get_seller_trade_party_node(self, vals):
         invoice = vals['invoice']
         supplier = vals['supplier']
@@ -472,6 +494,12 @@ class AccountEdiCii(models.AbstractModel):
             scheme_id = "0002"
             legal_organization_val = legal_organization_val[:9]
         supplier_vat = invoice.fiscal_position_id.foreign_vat or commercial_partner.vat
+        if self._cii_is_vat_void(supplier_vat):
+            supplier_vat = None
+        # Beyond the seller's VAT (handled separately): the German Steuernummer, if set.
+        seller_extra_tax_registrations = []
+        if (stnr := invoice.company_id._get_l10n_de_stnr()):
+            seller_extra_tax_registrations.append({'scheme': 'FC', 'value': stnr})
         return self._cii_get_partner_trade_party_node(vals, {
             'gln': False,
             'name': supplier.name,
@@ -492,9 +520,13 @@ class AccountEdiCii(models.AbstractModel):
             'peppol_eas': supplier.peppol_eas,
             'peppol_endpoint': supplier.peppol_endpoint,
             'partner_tax_registration': supplier_vat,
+            'extra_partner_tax_registrations': seller_extra_tax_registrations,
         })
 
     def _cii_get_partner_trade_party_node(self, vals, partner_values):
+        tax_registrations = partner_values.get('extra_partner_tax_registrations', [])
+        if (vat := partner_values.get('partner_tax_registration', '')) and not self._cii_is_vat_void(vat):
+            tax_registrations.insert(0, {'scheme': 'VA', 'value': vat})
         return {
             'ram:ID': {
                 'schemeID': '0088',
@@ -515,12 +547,14 @@ class AccountEdiCii(models.AbstractModel):
                     '_text': partner_values['peppol_endpoint'],
                 },
             } if partner_values['peppol_eas'] and partner_values['peppol_endpoint'] else None,
-            'ram:SpecifiedTaxRegistration': {
-                'ram:ID': {
-                    '_text': partner_values['partner_tax_registration'],
-                    'schemeID': 'VA',
-                },
-            } if partner_values['partner_tax_registration'] else None,
+            'ram:SpecifiedTaxRegistration': [
+                {
+                    'ram:ID': {
+                        '_text': tax_registration['value'],
+                        'schemeID': tax_registration['scheme'],
+                    },
+                } for tax_registration in tax_registrations
+            ],
         }
 
     def _cii_get_defined_trade_contact_node(self, vals, contact_values):
@@ -554,6 +588,7 @@ class AccountEdiCii(models.AbstractModel):
         if siret.is_valid(legal_organization_val):
             scheme_id = "0002"
             legal_organization_val = legal_organization_val[:9]
+        buyer_vat = customer.vat if not self._cii_is_vat_void(customer.vat) else None
         return self._cii_get_partner_trade_party_node(vals, {
             'gln': False,
             'name': name,
@@ -573,7 +608,7 @@ class AccountEdiCii(models.AbstractModel):
             },
             'peppol_eas': customer.peppol_eas,
             'peppol_endpoint': customer.peppol_endpoint,
-            'partner_tax_registration': customer.vat,
+            'partner_tax_registration': buyer_vat,
         })
 
     def _cii_get_applicable_header_trade_delivery_node(self, vals):
@@ -682,18 +717,8 @@ class AccountEdiCii(models.AbstractModel):
         }
 
     def _cii_get_billing_specified_period_node(self, vals):
-        invoice = vals['invoice']
-        billing_start_dates = [invoice.invoice_date] if invoice.invoice_date else []
-        billing_end_dates = [invoice.invoice_date_due] if invoice.invoice_date_due else []
-        if "deferred_start_date" in invoice.invoice_line_ids._fields:
-            # only checking the existence of the first of the enterprise fields
-            billing_start_dates += [move_line.deferred_start_date for move_line in invoice.invoice_line_ids if move_line.deferred_start_date]
-            billing_end_dates += [move_line.deferred_end_date for move_line in invoice.invoice_line_ids if move_line.deferred_end_date]
-        start_date = end_date = None
-        if billing_start_dates:
-            start_date = min(billing_start_dates)
-        if billing_end_dates:
-            end_date = max(billing_end_dates)
+        start_date = vals['billing_start_date']
+        end_date = vals['billing_end_date']
         return {
             'ram:StartDateTime': self._cii_get_date_time_string_node(vals, start_date) if start_date else None,
             'ram:EndDateTime': self._cii_get_date_time_string_node(vals, end_date) if end_date else None,
@@ -965,7 +990,7 @@ class AccountEdiCii(models.AbstractModel):
             ('street2', ".//{*}LineTwo"),
             ('city', ".//{*}CityName"),
             ('country_code', ".//{*}CountryID"),
-            ('vat', "./{*}SpecifiedTaxRegistration/{*}ID")
+            ('vat', './{*}SpecifiedTaxRegistration/{*}ID[@schemeID="VA"]'),
         ):
             customer_values[key] = None
             if (node := party_node.find(xpath)) is not None:
@@ -976,6 +1001,15 @@ class AccountEdiCii(models.AbstractModel):
             customer_values['peppol_endpoint'] = node.text
             if peppol_eas := node.attrib.get('schemeID'):
                 customer_values['peppol_eas'] = peppol_eas
+
+        # fallback to an unqualified tax registration only when no VA entry was found
+        if not customer_values['vat']:
+            nodes = [
+                node for node in party_node.findall('./{*}SpecifiedTaxRegistration/{*}ID')
+                if not node.attrib
+            ]
+            if len(nodes) > 0:
+                customer_values['vat'] = nodes[0].text
 
     def _import_cii_retrieve_customer(self, collected_values):
         self._import_retrieve_customer(collected_values)
@@ -1273,7 +1307,13 @@ class AccountEdiCii(models.AbstractModel):
             # discount_amount = 300.0
             if not currency.is_zero(price_subtotal):
                 price_unit = round((price_subtotal + price_discount_amount) / price_quantity, 2)
-                discount_amount += price_discount_amount * quantity / price_quantity
+                line_price_discount_amount = price_discount_amount * quantity / price_quantity
+
+                line_total_discount_amount = (price_unit * quantity) - subtotal
+                rounding_tolerance = max(currency.rounding, 0.01) * abs(quantity) / price_quantity
+                if price_discount_amount and currency.compare_amounts(abs(line_total_discount_amount - line_price_discount_amount), rounding_tolerance) <= 0:
+                    line_price_discount_amount = line_total_discount_amount
+                discount_amount += line_price_discount_amount
         else:
             quantity = 0.0
             price_unit = 0.0

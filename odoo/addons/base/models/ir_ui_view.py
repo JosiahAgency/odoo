@@ -459,10 +459,12 @@ actual arch.
 
                     # During an upgrade, we can only use the views that have been
                     # fully upgraded already.
-                    if self.pool._init and sibling_primary_views and self.pool._init_modules:
-                        query = sibling_primary_views._get_filter_xmlid_query()
-                        sql = SQL(query, res_ids=tuple(sibling_primary_views.ids), modules=tuple(self.pool._init_modules))
-                        loaded_view_ids = {id_ for id_, in self.env.execute_query(sql)}
+                    if self.pool._init and sibling_primary_views:
+                        loaded_view_ids = set()
+                        if self.pool._init_modules:
+                            query = sibling_primary_views._get_filter_xmlid_query()
+                            sql = SQL(query, res_ids=tuple(sibling_primary_views.ids), modules=tuple(self.pool._init_modules))
+                            loaded_view_ids = {id_ for id_, in self.env.execute_query(sql)}
                         loaded_view_ids.update({
                             id
                             for id, xid in (sibling_primary_views - views.browse(loaded_view_ids)).get_external_id().items()
@@ -667,7 +669,11 @@ actual arch.
 
     def unlink(self):
         # if in uninstall mode and has children views, emulate an ondelete cascade
-        if self.env.context.get('_force_unlink', False) and self.inherit_children_ids:
+        if (
+            (self.env.context.get('_force_unlink', False) or
+            self.env.context.get('cascade_unlink_views')) and
+            self.inherit_children_ids
+        ):
             self.inherit_children_ids.unlink()
         self.env.registry.clear_cache('templates')
         return super().unlink()
@@ -1681,7 +1687,7 @@ actual arch.
                 if isinstance(domain, str):
                     vnames = get_expression_field_names(domain)
                     name_manager.must_have_fields(node, vnames, node_info, ('domain', domain))
-            if field.type == 'properties':
+            if field.type == 'properties' and field.definition_record:
                 name_manager.must_have_fields(node, [field.definition_record], node_info, ('fieldname', field.name))
             context = node.get('context')
             if context:
@@ -1950,7 +1956,7 @@ actual arch.
                 )
                 self._raise_view_error(msg, node)
 
-            if field.type == 'properties' and node_info['view_type'] != 'search':
+            if field.type == 'properties' and field.definition_record and node_info['view_type'] != 'search':
                 name_manager.must_have_fields(node, {field._description_definition_record}, node_info, use=f"definition record of {field.name}")
 
             for child in node:

@@ -21,6 +21,16 @@ class ProductProduct(models.Model):
     _order = 'default_code, name, id'
     _check_company_domain = models.check_company_domain_parent_of
 
+    @api.model
+    def default_get(self, fields):
+        res = super().default_get(fields)
+        if 'uom_id' in fields and not res.get('uom_id'):
+            # Since uom is required, always fallback on a default (if any) even when the context
+            # gives an empty default value. Delegating to the product template default_get override
+            # as it already handles erroneous `{'default_uom_id': False}` context value.
+            res['uom_id'] = self.env['product.template'].default_get(['uom_id']).get('uom_id', False)
+        return res
+
     # price_extra: catalog extra value only, sum of variant extra attributes
     price_extra = fields.Float(
         'Variant Price Extra', compute='_compute_product_price_extra',
@@ -813,7 +823,7 @@ class ProductProduct(models.Model):
             domain = Domain(domain) & Domain('categ_id', 'child_of', self.env.context['search_default_categ_id'])
         return super()._search(domain, *args, **kwargs)
 
-    @api.depends('name', 'default_code', 'product_tmpl_id')
+    @api.depends('name', 'default_code', 'product_tmpl_id', 'purchase_ok')
     @api.depends_context('display_default_code', 'seller_id', 'company_id', 'partner_id', 'formatted_display_name', 'lang')
     def _compute_display_name(self):
 
@@ -840,7 +850,8 @@ class ProductProduct(models.Model):
         if partner_ids:
             # prefetch the fields used by the `display_name`
             supplier_info = self.env['product.supplierinfo'].sudo().search_fetch(
-                [('product_tmpl_id', 'in', product_template_ids), ('partner_id', 'in', partner_ids)],
+                [('product_tmpl_id', 'in', product_template_ids), ('partner_id', 'in', partner_ids),
+                 ('product_tmpl_id.purchase_ok', '=', True)],
                 ['product_tmpl_id', 'product_id', 'company_id', 'product_name', 'product_code'],
             )
             supplier_info_by_template = {}
@@ -936,7 +947,19 @@ class ProductProduct(models.Model):
     @api.model
     def name_search(self, name='', domain=None, operator='ilike', limit=100):
         if not name:
-            return super().name_search(name, domain, operator, limit)
+            domain = Domain(domain or Domain.TRUE)
+            favorite_products = self.search_fetch(
+                domain & Domain("is_favorite", "=", True), ["display_name"], limit=limit
+            )
+            limit_products = limit and limit - len(favorite_products)
+            products = favorite_products
+            if limit_products is None or limit_products > 0:
+                products |= self.search_fetch(
+                    domain & Domain("is_favorite", "=", False),
+                    ["display_name"],
+                    limit=limit_products,
+                )
+            return [(product.id, product.display_name) for product in products.sudo()]
         # search progressively by the most specific attributes
         positive_operators = ['=', 'ilike', '=ilike', 'like', '=like']
         is_positive = not operator in Domain.NEGATIVE_OPERATORS
