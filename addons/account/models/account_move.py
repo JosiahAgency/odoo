@@ -1481,7 +1481,7 @@ class AccountMove(models.Model):
         for move in self:
             move.show_journal = (
                 len(move.suitable_journal_ids) > 1
-                or move.journal_id and move.journal_id not in move.suitable_journal_ids
+                or move.journal_id and move.journal_id not in move.suitable_journal_ids._origin
             )
 
     def _compute_payments_widget_to_reconcile_info(self):
@@ -5707,6 +5707,14 @@ class AccountMove(models.Model):
                     accounts_codes_names=format_list(self.env, mismatched_accounts.mapped('display_name'))
                 ))
 
+            move_taxes = move.line_ids.tax_ids | move.line_ids.tax_line_id
+            mismatched_taxes = move_taxes.filtered(lambda tax: tax.sudo().company_id not in move_company_and_parents)
+            if mismatched_taxes:
+                validation_msgs.add(self.env._(
+                    "The entry is using taxes (%(tax_names)s) from a different company.",
+                    tax_names=format_list(self.env, mismatched_taxes.mapped('display_name'))
+                ))
+
         if validation_msgs:
             msg = "\n".join([line for line in validation_msgs])
             raise UserError(msg)
@@ -7224,8 +7232,9 @@ class AccountMove(models.Model):
         # Dispatch the attachments into groups, and create a new invoice for each group beyond the first.
         valid_files_data = []
         extra_files_data = []
+        is_email = new_message.message_type == 'email'
         for file_data in files_data:
-            if self._should_attach_to_record(file_data['attachment']) or file_data['xml_tree'] is not None:
+            if self.with_context(from_email=is_email)._should_attach_to_record(file_data['attachment']) or file_data['xml_tree'] is not None:
                 valid_files_data.append(file_data)
             else:
                 extra_files_data.append(file_data)
