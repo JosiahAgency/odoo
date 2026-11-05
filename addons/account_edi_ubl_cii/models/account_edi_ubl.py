@@ -1413,9 +1413,17 @@ class AccountEdiUBL(models.AbstractModel):
         if not country_code:
             return
 
-        if commercial_partner.vat and commercial_partner.vat != '/':
-            vat = commercial_partner.vat
-            country_code = commercial_partner.country_id.code
+        vat = commercial_partner.vat
+        if (
+            self._is_document(vals, 'invoice', 'credit_note', 'self_invoice', 'self_credit_note')
+            and commercial_partner == vals['company'].partner_id
+        ):
+            fiscal_position = vals['invoice'].fiscal_position_id
+            if fiscal_position.foreign_vat:
+                vat = fiscal_position.foreign_vat
+                country_code = fiscal_position.country_id.code
+
+        if vat and vat != '/':
             if country_code in GST_COUNTRY_CODES:
                 tax_scheme_id = 'GST'
             else:
@@ -2857,6 +2865,7 @@ class AccountEdiUBL(models.AbstractModel):
                 pattern = f'{prefix}\\d{{{sequence.padding}}}{suffix}'
                 refs = re.findall(pattern, ' '.join([desc.text for desc in tree.findall('.//{*}Item/{*}Description') if desc.text]))
                 invoice_origin = ' '.join(refs)
+                collected_values['file_data']['invoice_origin_from_description'] = bool(invoice_origin)
 
         if invoice_origin:
             collected_values['to_write']['invoice_origin'] = invoice_origin
